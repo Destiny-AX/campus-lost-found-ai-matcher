@@ -48,7 +48,7 @@ Kimi 语义相似度会比较模型识别出的物品名称、类别、颜色、
 
 ## 运行方式
 
-推荐使用 Node.js 启动，这样可以调用 Kimi K2.6：
+本地开发推荐使用 Node.js 启动，这样可以调用 Kimi K2.6：
 
 ```bash
 npm start
@@ -61,6 +61,22 @@ http://localhost:4173
 ```
 
 服务端会读取用户变量 `silicon_flow_api_key`。如果没有配置密钥或接口调用失败，页面仍可运行，并自动退回到本地图像特征匹配。
+
+## Vercel 部署
+
+本项目包含 Vercel Serverless Function：
+
+```text
+api/analyze-image.js
+```
+
+部署到 Vercel 后，需要在 Vercel 项目环境变量中配置：
+
+```text
+silicon_flow_api_key=<你的 SiliconFlow API Key>
+```
+
+前端通过 `/api/analyze-image` 调用服务端函数，API Key 不会暴露到浏览器。
 
 ## 后续扩展方向
 
