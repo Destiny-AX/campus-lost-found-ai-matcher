@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>校园失物招领 AI 智能匹配程序</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-nav" aria-label="主导航">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">拾</div>
+          <div>
+            <h1>校园拾寻</h1>
+            <p>AI 智能匹配</p>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-item is-active" data-view-target="home" type="button">
+            <span class="nav-icon" aria-hidden="true">⌂</span>
+            <span>失物广场</span>
+          </button>
+          <button class="nav-item" data-view-target="match" type="button">
+            <span class="nav-icon" aria-hidden="true">◎</span>
+            <span>AI 匹配</span>
+          </button>
+          <button class="nav-item" data-view-target="publish" type="button">
+            <span class="nav-icon" aria-hidden="true">＋</span>
+            <span>发布信息</span>
+          </button>
+          <button class="nav-item" data-view-target="stats" type="button">
+            <span class="nav-icon" aria-hidden="true">▦</span>
+            <span>数据概览</span>
+          </button>
+        </nav>
+          <div class="side-note">
+          <strong>算法能力</strong>
+          <p>融合文本、地点、时间、图片视觉特征与 Kimi 语义识别，生成可解释匹配分数。</p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Campus Lost & Found</p>
+            <h2>校园失物招领 AI 智能匹配程序</h2>
+          </div>
+          <button class="primary-action" data-view-target="publish" type="button">发布</button>
+        </header>
+
+        <section class="mobile-title" aria-label="移动端标题">
+          <div class="mobile-brand-mark" aria-hidden="true">拾</div>
+          <div>
+            <h1>校园拾寻</h1>
+            <p>失物招领 AI 智能匹配</p>
+          </div>
+        </section>
+
+        <section class="view is-active" id="view-home" aria-labelledby="home-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="home-heading">失物广场</h3>
+              <p>浏览校园内发布的失物和招领信息，系统会自动标记高匹配线索。</p>
+            </div>
+            <div class="filter-group" role="group" aria-label="信息筛选">
+              <button class="chip is-active" data-filter="all" type="button">全部</button>
+              <button class="chip" data-filter="lost" type="button">失物</button>
+              <button class="chip" data-filter="found" type="button">招领</button>
+              <button class="chip" data-filter="hot" type="button">高匹配</button>
+            </div>
+          </div>
+          <div class="search-row">
+            <input id="searchInput" type="search" placeholder="搜索物品、地点、颜色或描述" autocomplete="off" />
+            <select id="categoryFilter" aria-label="按类别筛选">
+              <option value="all">全部类别</option>
+              <option value="证件">证件</option>
+              <option value="电子设备">电子设备</option>
+              <option value="生活用品">生活用品</option>
+              <option value="学习用品">学习用品</option>
+              <option value="钥匙">钥匙</option>
+            </select>
+          </div>
+          <div class="card-grid" id="itemList"></div>
+        </section>
+
+        <section class="view" id="view-match" aria-labelledby="match-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="match-heading">AI 智能匹配</h3>
+              <p>选择一条失物或招领信息，程序会重新计算候选匹配项并解释文本、时空、图像和语义分数来源。</p>
+            </div>
+          </div>
+          <div class="match-layout">
+            <div class="match-control">
+              <label for="queryRecord">待匹配信息</label>
+              <select id="queryRecord"></select>
+              <div class="selected-card" id="selectedRecord"></div>
+              <div class="score-note">
+                <strong>当前权重</strong>
+                <span>类别 13% · 颜色 8% · 地点 14% · 时间 11% · 文本 14% · 图像 20% · 语义 20%</span>
+              </div>
+            </div>
+            <div class="match-results" id="matchResults"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-publish" aria-labelledby="publish-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="publish-heading">发布信息</h3>
+              <p>上传图片后，浏览器会提取视觉特征，并尝试调用 Kimi K2.6 识别物品语义标签。</p>
+            </div>
+          </div>
+          <form class="publish-form" id="publishForm">
+            <div class="form-row segmented" role="group" aria-label="发布类型">
+              <label>
+                <input type="radio" name="type" value="lost" checked />
+                <span>我丢失了物品</span>
+              </label>
+              <label>
+                <input type="radio" name="type" value="found" />
+                <span>我捡到了物品</span>
+              </label>
+            </div>
+            <div class="form-grid">
+              <label>
+                物品名称
+                <input name="title" required placeholder="例如：蓝色水杯" />
+              </label>
+              <label>
+                物品类别
+                <select name="category" required>
+                  <option value="证件">证件</option>
+                  <option value="电子设备">电子设备</option>
+                  <option value="生活用品">生活用品</option>
+                  <option value="学习用品">学习用品</option>
+                  <option value="钥匙">钥匙</option>
+                </select>
+              </label>
+              <label>
+                主要颜色
+                <select name="color" required>
+                  <option value="黑色">黑色</option>
+                  <option value="白色">白色</option>
+                  <option value="蓝色">蓝色</option>
+                  <option value="红色">红色</option>
+                  <option value="黄色">黄色</option>
+                  <option value="绿色">绿色</option>
+                  <option value="银色">银色</option>
+                  <option value="透明">透明</option>
+                </select>
+              </label>
+              <label>
+                地点
+                <select name="location" required>
+                  <option value="图书馆一楼">图书馆一楼</option>
+                  <option value="图书馆三楼">图书馆三楼</option>
+                  <option value="一食堂">一食堂</option>
+                  <option value="二食堂">二食堂</option>
+                  <option value="教学楼A区">教学楼A区</option>
+                  <option value="教学楼B区">教学楼B区</option>
+                  <option value="操场看台">操场看台</option>
+                  <option value="宿舍区门口">宿舍区门口</option>
+                </select>
+              </label>
+              <label>
+                时间
+                <input name="time" type="datetime-local" required />
+              </label>
+              <label>
+                联系方式
+                <input name="contact" required placeholder="微信 / 手机 / 班级群" />
+              </label>
+            </div>
+            <label class="wide-label">
+              描述
+              <textarea name="description" rows="4" required placeholder="补充品牌、外观、特殊标记、可能遗失位置等"></textarea>
+            </label>
+            <div class="upload-zone">
+              <label class="upload-card" id="dropZone">
+                <input id="imageInput" name="image" type="file" accept="image/*" />
+                <span>拖入或选择图片</span>
+                <small>支持 JPG / PNG / WebP，用于提取视觉特征与 Kimi 语义标签</small>
+              </label>
+              <div class="image-preview" id="imagePreview">
+                <span>暂无图片</span>
+              </div>
+              <div class="feature-preview" id="featurePreview">
+                <strong>图像特征与语义识别</strong>
+                <p>上传图片后显示提取结果。</p>
+              </div>
+            </div>
+            <button class="submit-button" type="submit">发布并计算匹配</button>
+          </form>
+        </section>
+
+        <section class="view" id="view-stats" aria-labelledby="stats-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="stats-heading">数据概览</h3>
+              <p>用于课堂展示项目价值和算法运行结果。</p>
+            </div>
+          </div>
+          <div class="metric-grid" id="metricGrid"></div>
+          <div class="explain-panel">
+            <h4>混合匹配算法</h4>
+            <div class="algorithm-grid">
+              <div>
+                <strong>文本语义线索</strong>
+                <p>类别、颜色、描述关键词、字符 n-gram 相似度。</p>
+              </div>
+              <div>
+                <strong>时空线索</strong>
+                <p>校园地点关联度与丢失/拾到时间间隔。</p>
+              </div>
+              <div>
+                <strong>图像低层特征</strong>
+                <p>主色、颜色直方图、感知哈希的综合相似度。</p>
+              </div>
+              <div>
+                <strong>Kimi 语义识别</strong>
+                <p>服务端安全调用 Kimi K2.6，提取物品名称、类别、品牌、可见文字和外观特征。</p>
+              </div>
+              <div>
+                <strong>可解释输出</strong>
+                <p>显示总分、单项分数和匹配理由，便于人工判断。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector" aria-label="匹配提醒">
+        <div class="inspector-card">
+          <h3>高匹配提醒</h3>
+          <div id="topAlerts"></div>
+        </div>
+        <div class="inspector-card">
+          <h3>能力边界</h3>
+          <p>上传图片时会优先调用 Kimi K2.6 做语义识别；如果服务端或密钥不可用，则保留本地视觉特征匹配。</p>
+        </div>
+      </aside>
+    </div>
+
+    <nav class="bottom-tabs" aria-label="移动端导航">
+      <button class="tab-item is-active" data-view-target="home" type="button">首页</button>
+      <button class="tab-item" data-view-target="match" type="button">匹配</button>
+      <button class="tab-item" data-view-target="publish" type="button">发布</button>
+      <button class="tab-item" data-view-target="stats" type="button">我的</button>
+    </nav>
+
+    <dialog id="detailDialog" class="detail-dialog">
+      <button class="dialog-close" id="closeDialog" type="button" aria-label="关闭">×</button>
+      <div id="detailContent"></div>
+    </dialog>
+
+    <script src="script.js"></script>
+  </body>
+</html>
