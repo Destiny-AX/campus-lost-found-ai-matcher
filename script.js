@@ -502,7 +502,7 @@ function renderSemanticBlock(semantic) {
   if (!semantic) return "";
   return `
     <div>
-      <strong>Kimi 语义标签</strong>
+      <strong>视觉语义标签</strong>
       <p>${escapeHtml(semantic.object_name)} · ${escapeHtml(semantic.category)} · 置信度 ${Math.round(semantic.confidence * 100)}%</p>
       <p>特征：${escapeHtml(semantic.features.join("、") || "暂无")}</p>
     </div>
@@ -525,7 +525,7 @@ async function processUploadedImage(file) {
   uploadedSemantic = null;
   uploadedFeature = await extractImageFeatures(dataUrl);
   els.imagePreview.innerHTML = `<img src="${dataUrl}" alt="上传的物品图片预览" />`;
-  renderFeaturePreview(uploadedFeature, null, "正在调用 Kimi K2.6 进行语义识别...");
+  renderFeaturePreview(uploadedFeature, null, "正在调用视觉模型进行语义识别...");
   uploadedSemantic = await analyzeImageSemantics(dataUrl);
   renderFeaturePreview(uploadedFeature, uploadedSemantic);
 }
@@ -542,7 +542,7 @@ function renderFeaturePreview(feature, semantic, statusText = "") {
   const semanticHtml = semantic
     ? `<p>语义结果：${escapeHtml(semantic.object_name)} · ${escapeHtml(semantic.category)} · 置信度 ${Math.round(semantic.confidence * 100)}%<br />
       特征：${escapeHtml(semantic.features.slice(0, 4).join("、") || "暂无")}</p>`
-    : `<p>${escapeHtml(statusText || "未获得 Kimi 语义结果，将使用本地图像特征匹配。")}</p>`;
+    : `<p>${escapeHtml(statusText || "未获得语义识别结果，将使用本地图像特征匹配。")}</p>`;
 
   els.featurePreview.innerHTML = `
     <strong>图像特征已提取</strong>
@@ -720,8 +720,8 @@ function buildReasons(a, b, breakdown) {
   if (breakdown.image >= 75) reasons.push("图片颜色分布和视觉结构相似");
   else if (breakdown.image >= 55) reasons.push("图片主色或整体色块有一定相似度");
 
-  if (breakdown.semantic >= 78) reasons.push("Kimi 识别出的物品语义和外观特征高度相似");
-  else if (breakdown.semantic >= 55) reasons.push("Kimi 语义标签存在部分重合，可作为辅助线索");
+  if (breakdown.semantic >= 78) reasons.push("视觉模型识别出的物品语义和外观特征高度相似");
+  else if (breakdown.semantic >= 55) reasons.push("语义标签存在部分重合，可作为辅助线索");
 
   const shared = [...tokenize(`${a.title} ${a.description}`)].filter((token) => tokenize(`${b.title} ${b.description}`).has(token));
   if (shared.length) reasons.push(`描述关键词重合：${shared.slice(0, 4).join("、")}`);

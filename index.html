@@ -36,7 +36,7 @@
         </nav>
           <div class="side-note">
           <strong>算法能力</strong>
-          <p>融合文本、地点、时间、图片视觉特征与 Kimi 语义识别，生成可解释匹配分数。</p>
+          <p>融合文本、地点、时间、图片视觉特征与视觉模型语义识别，生成可解释匹配分数。</p>
         </div>
       </aside>
 
@@ -109,7 +109,7 @@
           <div class="section-head">
             <div>
               <h3 id="publish-heading">发布信息</h3>
-              <p>上传图片后，浏览器会提取视觉特征，并尝试调用 Kimi K2.6 识别物品语义标签。</p>
+              <p>上传图片后，浏览器会提取视觉特征，并尝试调用视觉模型识别物品语义标签。</p>
             </div>
           </div>
           <form class="publish-form" id="publishForm">
@@ -181,7 +181,7 @@
               <label class="upload-card" id="dropZone">
                 <input id="imageInput" name="image" type="file" accept="image/*" />
                 <span>拖入或选择图片</span>
-                <small>支持 JPG / PNG / WebP，用于提取视觉特征与 Kimi 语义标签</small>
+                <small>支持 JPG / PNG / WebP，用于提取视觉特征与语义标签</small>
               </label>
               <div class="image-preview" id="imagePreview">
                 <span>暂无图片</span>
@@ -219,8 +219,8 @@
                 <p>主色、颜色直方图、感知哈希的综合相似度。</p>
               </div>
               <div>
-                <strong>Kimi 语义识别</strong>
-                <p>服务端安全调用 Kimi K2.6，提取物品名称、类别、品牌、可见文字和外观特征。</p>
+                <strong>视觉模型语义识别</strong>
+                <p>服务端安全调用 SiliconFlow 图像理解模型，提取物品名称、类别、品牌、可见文字和外观特征。</p>
               </div>
               <div>
                 <strong>可解释输出</strong>
@@ -238,7 +238,7 @@
         </div>
         <div class="inspector-card">
           <h3>能力边界</h3>
-          <p>上传图片时会优先调用 Kimi K2.6 做语义识别；如果服务端或密钥不可用，则保留本地视觉特征匹配。</p>
+          <p>上传图片时会优先调用视觉模型做语义识别；如果服务端或密钥不可用，则保留本地视觉特征匹配。</p>
         </div>
       </aside>
     </div>

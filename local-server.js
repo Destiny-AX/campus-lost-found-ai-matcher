@@ -7,8 +7,8 @@ const { execFileSync } = require("child_process");
 
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
-const MODEL = process.env.SILICON_FLOW_MODEL || "moonshotai/Kimi-K2.6";
-const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.com/v1/chat/completions";
+const MODEL = process.env.SILICON_FLOW_MODEL || "Qwen/Qwen3-VL-8B-Instruct";
+const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
