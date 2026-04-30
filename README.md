@@ -60,7 +60,7 @@ npm start
 http://localhost:4173
 ```
 
-服务端会读取用户变量 `silicon_flow_api_key`。如果没有配置密钥或接口调用失败，页面仍可运行，并自动退回到本地图像特征匹配。
+本地服务由 `local-server.js` 提供，会读取用户变量 `silicon_flow_api_key`。如果没有配置密钥或接口调用失败，页面仍可运行，并自动退回到本地图像特征匹配。
 
 ## Vercel 部署
 
