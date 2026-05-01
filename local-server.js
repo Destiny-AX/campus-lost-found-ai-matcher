@@ -166,6 +166,7 @@ function serveStatic(pathname, res, headOnly) {
 
 function getSiliconFlowApiKey() {
   const inherited = (
+    process.env.LOST_FOUND_SILICON_FLOW_API_KEY ||
     process.env.silicon_flow_api_key ||
     process.env.SILICON_FLOW_API_KEY ||
     process.env.SILICONFLOW_API_KEY ||
@@ -177,7 +178,7 @@ function getSiliconFlowApiKey() {
     try {
       return execFileSync(
         "powershell.exe",
-        ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('silicon_flow_api_key','User')"],
+        ["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('LOST_FOUND_SILICON_FLOW_API_KEY','User') -or [Environment]::GetEnvironmentVariable('silicon_flow_api_key','User')"],
         { encoding: "utf8", windowsHide: true, timeout: 3000 },
       ).trim();
     } catch (error) {

@@ -103,6 +103,7 @@ module.exports = async function handler(req, res) {
 
 function getSiliconFlowApiKey() {
   return (
+    process.env.LOST_FOUND_SILICON_FLOW_API_KEY ||
     process.env.silicon_flow_api_key ||
     process.env.SILICON_FLOW_API_KEY ||
     process.env.SILICONFLOW_API_KEY ||

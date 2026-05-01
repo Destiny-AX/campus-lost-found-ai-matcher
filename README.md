@@ -105,11 +105,11 @@ api/records.js
 
 ```text
 silicon_flow_api_key=<你的 SiliconFlow API Key>
-SUPABASE_URL=<你的 Supabase Project URL>
-SUPABASE_SERVICE_ROLE_KEY=<你的 Supabase service_role key>
+LOST_FOUND_SUPABASE_URL=<你的 Supabase Project URL>
+LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY=<你的 Supabase service_role key>
 ```
 
-前端通过 `/api/analyze-image` 调用图像语义识别，通过 `/api/records` 读写失物招领记录。API Key 和 Supabase service role key 都只保存在服务端环境变量中，不会暴露到浏览器。
+前端通过 `/api/analyze-image` 调用图像语义识别，通过 `/api/records` 读写失物招领记录。API Key 和 Supabase service role key 都只保存在服务端环境变量中，不会暴露到浏览器。代码也兼容旧变量名 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。
 
 ## 后续扩展方向
 

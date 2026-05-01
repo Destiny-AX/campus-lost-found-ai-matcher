@@ -70,8 +70,14 @@ async function handleCreate(req, res) {
 }
 
 function getSupabaseConfig() {
-  const url = (readEnv("SUPABASE_URL") || readEnv("supabase_url") || "").replace(/\/$/, "");
+  const url = (
+    readEnv("LOST_FOUND_SUPABASE_URL") ||
+    readEnv("SUPABASE_URL") ||
+    readEnv("supabase_url") ||
+    ""
+  ).replace(/\/$/, "");
   const key =
+    readEnv("LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY") ||
     readEnv("SUPABASE_SERVICE_ROLE_KEY") ||
     readEnv("supabase_service_role_key") ||
     readEnv("SUPABASE_ANON_KEY") ||
