@@ -50,7 +50,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 320px;
+  grid-template-columns: 250px minmax(0, 1fr) 300px;
   gap: 18px;
   min-height: 100vh;
   padding: 18px;
@@ -261,6 +261,10 @@ button {
   margin: 2px 0 16px;
 }
 
+.section-head > div:first-child {
+  min-width: 0;
+}
+
 .section-head h3 {
   margin-bottom: 6px;
   font-size: 25px;
@@ -269,12 +273,15 @@ button {
 
 .filter-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   justify-content: flex-end;
+  flex: 0 0 auto;
+  max-width: 100%;
 }
 
 .chip {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid var(--hairline);
@@ -292,9 +299,17 @@ button {
 
 .search-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 178px);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 12px;
   margin-bottom: 16px;
+  align-items: center;
+}
+
+#categoryFilter {
+  min-width: 0;
+  width: 100%;
+  padding-right: 34px;
+  text-overflow: ellipsis;
 }
 
 input,
@@ -842,6 +857,32 @@ textarea:focus {
   }
 }
 
+@media (min-width: 1181px) and (max-width: 1660px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr) 280px;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .top-bar h2 {
+    font-size: 34px;
+  }
+
+  .section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .filter-group {
+    justify-content: flex-start;
+  }
+
+  .search-row {
+    grid-template-columns: minmax(0, 1fr) 180px;
+  }
+}
+
 @media (max-width: 1024px) {
   body {
     padding-bottom: 82px;
@@ -907,6 +948,7 @@ textarea:focus {
 
   .search-row {
     gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 168px;
   }
 
   .match-item {
@@ -947,22 +989,6 @@ textarea:focus {
     color: var(--muted);
     background: transparent;
     font-weight: 740;
-  }
-}
-
-@media (min-width: 1025px) and (max-width: 1440px) {
-  .app-shell {
-    grid-template-columns: 220px minmax(0, 1fr) 280px;
-    gap: 14px;
-    padding: 14px;
-  }
-
-  .card-grid {
-    grid-template-columns: repeat(2, minmax(260px, 1fr));
-  }
-
-  .top-bar h2 {
-    font-size: 32px;
   }
 }
 
