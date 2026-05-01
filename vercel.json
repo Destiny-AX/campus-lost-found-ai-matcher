@@ -16,12 +16,20 @@
     {
       "src": "api/analyze-image.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/records.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/analyze-image",
       "dest": "/api/analyze-image.js"
+    },
+    {
+      "src": "/api/records",
+      "dest": "/api/records.js"
     },
     {
       "src": "/style.css",

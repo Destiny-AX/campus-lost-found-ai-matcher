@@ -769,7 +769,9 @@ textarea:focus {
 }
 
 .detail-dialog {
-  width: min(720px, calc(100vw - 28px));
+  width: min(980px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  overflow: hidden;
   border: 0;
   border-radius: 24px;
   padding: 0;
@@ -782,27 +784,29 @@ textarea:focus {
 
 .dialog-close {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 18px;
+  right: 18px;
   z-index: 1;
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
   border: 0;
   border-radius: 999px;
   color: var(--ink);
   background: rgba(255, 255, 255, 0.84);
-  font-size: 24px;
+  font-size: 28px;
 }
 
 .detail-content {
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1fr);
-  gap: 16px;
-  padding: 18px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1fr);
+  gap: 28px;
+  max-height: min(760px, calc(100vh - 28px));
+  overflow: auto;
+  padding: 30px 88px 30px 30px;
 }
 
 .detail-content img {
-  height: 260px;
+  height: 350px;
   border-radius: 20px;
 }
 

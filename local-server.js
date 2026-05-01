@@ -4,6 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const recordsHandler = require("./api/records");
 
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
@@ -28,6 +29,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/analyze-image") {
       await handleAnalyzeImage(req, res);
+      return;
+    }
+
+    if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/records") {
+      await recordsHandler(req, res);
       return;
     }
 

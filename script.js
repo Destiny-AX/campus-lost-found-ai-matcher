@@ -187,7 +187,7 @@ const els = {};
 document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
   bindEvents();
-  records = await Promise.all(initialRecords.map(hydrateRecord));
+  records = await loadRecords();
   fillDefaultTime();
   renderAll();
 });
@@ -271,10 +271,34 @@ function switchView(view) {
   if (view === "stats") renderStats();
 }
 
+async function loadRecords() {
+  const seedRecords = await Promise.all(initialRecords.map(hydrateRecord));
+  const remoteRecords = await fetchPersistedRecords();
+  const remoteIds = new Set(remoteRecords.map((record) => record.id));
+  return [...remoteRecords, ...seedRecords.filter((record) => !remoteIds.has(record.id))];
+}
+
 async function hydrateRecord(record) {
-  const imageData = createSyntheticImage(record.visualSeed, record.title);
-  const imageFeature = await extractImageFeatures(imageData);
-  return { ...record, imageData, imageFeature };
+  const imageData = record.imageData || createSyntheticImage(record.visualSeed, record.title);
+  const imageFeature = record.imageFeature || (await extractImageFeatures(imageData));
+  return {
+    ...record,
+    imageData,
+    imageFeature,
+    semantic: record.semantic || buildFallbackSemantic(record),
+  };
+}
+
+async function fetchPersistedRecords() {
+  try {
+    const response = await fetch("/api/records");
+    if (!response.ok) return [];
+    const payload = await response.json();
+    const list = Array.isArray(payload.records) ? payload.records.filter(Boolean) : [];
+    return Promise.all(list.map(hydrateRecord));
+  } catch (error) {
+    return [];
+  }
 }
 
 function renderAll() {
@@ -585,7 +609,8 @@ async function handlePublish(event) {
     semantic: uploadedSemantic || buildFallbackSemantic(data),
   };
 
-  records.unshift(newRecord);
+  const persistedRecord = await persistRecord(newRecord);
+  records.unshift(persistedRecord || newRecord);
   els.publishForm.reset();
   fillDefaultTime();
   uploadedFeature = null;
@@ -596,6 +621,21 @@ async function handlePublish(event) {
   renderAll();
   els.queryRecord.value = newRecord.id;
   switchView("match");
+}
+
+async function persistRecord(record) {
+  try {
+    const response = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ record }),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return payload.record ? hydrateRecord(payload.record) : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 function getBestMatch(record) {
