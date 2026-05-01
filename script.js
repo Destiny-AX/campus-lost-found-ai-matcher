@@ -544,7 +544,8 @@ async function processUploadedImage(file) {
     renderUploadMessage("请选择图片文件。");
     return;
   }
-  const dataUrl = await readFileAsDataURL(file);
+  const rawDataUrl = await readFileAsDataURL(file);
+  const dataUrl = await resizeImageDataUrl(rawDataUrl, 980, 0.82);
   uploadedImageData = dataUrl;
   uploadedSemantic = null;
   uploadedFeature = await extractImageFeatures(dataUrl);
@@ -978,6 +979,24 @@ function readFileAsDataURL(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+async function resizeImageDataUrl(dataUrl, maxSide, quality) {
+  const image = await loadImage(dataUrl);
+  const largestSide = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height);
+  if (!largestSide || largestSide <= maxSide && dataUrl.length < 900000) return dataUrl;
+
+  const scale = Math.min(1, maxSide / largestSide);
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
 function tokenize(text) {
