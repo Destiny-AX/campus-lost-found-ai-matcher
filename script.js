@@ -183,6 +183,7 @@ let uploadedImageData = "";
 let uploadedSemantic = null;
 
 const els = {};
+const OWN_RECORD_IDS_KEY = "campus-lost-found-own-record-ids";
 
 document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
@@ -200,6 +201,7 @@ function cacheElements() {
   els.selectedRecord = document.querySelector("#selectedRecord");
   els.matchResults = document.querySelector("#matchResults");
   els.publishForm = document.querySelector("#publishForm");
+  els.submitButton = els.publishForm.querySelector(".submit-button");
   els.imageInput = document.querySelector("#imageInput");
   els.dropZone = document.querySelector("#dropZone");
   els.imagePreview = document.querySelector("#imagePreview");
@@ -339,10 +341,17 @@ function renderItemList() {
       switchView("match");
     });
   });
+
+  els.itemList.querySelectorAll("[data-delete-id]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecord(button.dataset.deleteId));
+  });
 }
 
 function renderRecordCard(record) {
   const best = getBestMatch(record);
+  const ownActions = isOwnRecord(record)
+    ? `<button class="danger-button" data-delete-id="${record.id}" type="button">删除</button>`
+    : "";
   return `
     <article class="card">
       <span class="thumb">
@@ -364,6 +373,7 @@ function renderRecordCard(record) {
         <div class="card-actions">
           <button class="ghost-button" data-detail-id="${record.id}" type="button">详情</button>
           <button class="ghost-button" data-match-id="${record.id}" type="button">匹配</button>
+          ${ownActions}
         </div>
       </div>
     </article>
@@ -483,6 +493,9 @@ function openDetail(id) {
   const record = records.find((item) => item.id === id);
   if (!record) return;
   const matches = getMatchesFor(record).slice(0, 3);
+  const ownActions = isOwnRecord(record)
+    ? `<button class="danger-button" data-delete-id="${record.id}" type="button">删除这条发布</button>`
+    : "";
 
   els.detailContent.innerHTML = `
     <div class="detail-content">
@@ -500,6 +513,7 @@ function openDetail(id) {
         </div>
         <p>${escapeHtml(record.description)}</p>
         <p><strong>联系方式：</strong>${escapeHtml(record.contact)}</p>
+        ${ownActions ? `<div class="card-actions">${ownActions}</div>` : ""}
         ${renderSemanticBlock(record.semantic)}
         <div>
           <strong>相似线索</strong>
@@ -520,6 +534,10 @@ function openDetail(id) {
   if (typeof els.detailDialog.showModal === "function") {
     els.detailDialog.showModal();
   }
+
+  els.detailContent.querySelectorAll("[data-delete-id]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecord(button.dataset.deleteId));
+  });
 }
 
 function renderSemanticBlock(semantic) {
@@ -580,48 +598,57 @@ function renderFeaturePreview(feature, semantic, statusText = "") {
 
 async function handlePublish(event) {
   event.preventDefault();
-  const form = new FormData(els.publishForm);
-  const data = Object.fromEntries(form.entries());
-  const fallbackImage = createSyntheticImage(
-    {
-      background: "#f3f6f4",
-      primary: rgbToHex(colorMap[data.color] || [90, 110, 120]),
-      secondary: "#ffffff",
-      shape: data.category === "电子设备" ? "earbud" : data.category === "钥匙" ? "key" : data.category === "证件" ? "card" : "cup",
-    },
-    data.title,
-  );
-  const imageData = uploadedImageData || fallbackImage;
-  const imageFeature = uploadedFeature || (await extractImageFeatures(imageData));
+  if (els.publishForm.classList.contains("is-submitting")) return;
+  setSubmitLoading(true);
 
-  const newRecord = {
-    id: `record-${Date.now()}`,
-    type: data.type,
-    title: data.title.trim(),
-    category: data.category,
-    color: data.color,
-    location: data.location,
-    time: data.time,
-    contact: data.contact.trim(),
-    description: data.description.trim(),
-    status: data.type === "lost" ? "待找回" : "待认领",
-    imageData,
-    imageFeature,
-    semantic: uploadedSemantic || buildFallbackSemantic(data),
-  };
+  try {
+    const form = new FormData(els.publishForm);
+    const data = Object.fromEntries(form.entries());
+    const fallbackImage = createSyntheticImage(
+      {
+        background: "#f3f6f4",
+        primary: rgbToHex(colorMap[data.color] || [90, 110, 120]),
+        secondary: "#ffffff",
+        shape: data.category === "电子设备" ? "earbud" : data.category === "钥匙" ? "key" : data.category === "证件" ? "card" : "cup",
+      },
+      data.title,
+    );
+    const imageData = uploadedImageData || fallbackImage;
+    const imageFeature = uploadedFeature || (await extractImageFeatures(imageData));
 
-  const persistedRecord = await persistRecord(newRecord);
-  records.unshift(persistedRecord || newRecord);
-  els.publishForm.reset();
-  fillDefaultTime();
-  uploadedFeature = null;
-  uploadedImageData = "";
-  uploadedSemantic = null;
-  els.imagePreview.innerHTML = "<span>暂无图片</span>";
-  els.featurePreview.innerHTML = "<strong>图像特征与语义识别</strong><p>上传图片后显示提取结果。</p>";
-  renderAll();
-  els.queryRecord.value = newRecord.id;
-  switchView("match");
+    const newRecord = {
+      id: `record-${Date.now()}`,
+      type: data.type,
+      title: data.title.trim(),
+      category: data.category,
+      color: data.color,
+      location: data.location,
+      time: data.time,
+      contact: data.contact.trim(),
+      description: data.description.trim(),
+      status: data.type === "lost" ? "待找回" : "待认领",
+      imageData,
+      imageFeature,
+      semantic: uploadedSemantic || buildFallbackSemantic(data),
+    };
+
+    const persistedRecord = await persistRecord(newRecord);
+    const savedRecord = persistedRecord || newRecord;
+    records.unshift(savedRecord);
+    markOwnRecord(savedRecord.id);
+    els.publishForm.reset();
+    fillDefaultTime();
+    uploadedFeature = null;
+    uploadedImageData = "";
+    uploadedSemantic = null;
+    els.imagePreview.innerHTML = "<span>暂无图片</span>";
+    els.featurePreview.innerHTML = "<strong>图像特征与语义识别</strong><p>上传图片后显示提取结果。</p>";
+    renderAll();
+    els.queryRecord.value = savedRecord.id;
+    switchView("match");
+  } finally {
+    setSubmitLoading(false);
+  }
 }
 
 async function persistRecord(record) {
@@ -637,6 +664,83 @@ async function persistRecord(record) {
   } catch (error) {
     return null;
   }
+}
+
+async function deleteRecord(id) {
+  const record = records.find((item) => item.id === id);
+  if (!record || !isOwnRecord(record)) return;
+  if (!confirm("确定删除这条发布记录吗？删除后线上也会同步移除。")) return;
+
+  try {
+    setDeleteButtonsLoading(id, true);
+    await deletePersistedRecord(id);
+    records = records.filter((item) => item.id !== id);
+    unmarkOwnRecord(id);
+    if (els.detailDialog.open) els.detailDialog.close();
+    renderAll();
+  } catch (error) {
+    alert("删除失败，请稍后重试。");
+  } finally {
+    setDeleteButtonsLoading(id, false);
+  }
+}
+
+async function deletePersistedRecord(id) {
+  const response = await fetch("/api/records", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!response.ok) {
+    throw new Error("Delete failed");
+  }
+}
+
+function setSubmitLoading(isLoading) {
+  els.publishForm.classList.toggle("is-submitting", isLoading);
+  els.submitButton.disabled = isLoading;
+  els.submitButton.classList.toggle("is-loading", isLoading);
+  els.submitButton.innerHTML = isLoading
+    ? `<span class="button-spinner" aria-hidden="true"></span><span>正在发布...</span>`
+    : "发布并计算匹配";
+}
+
+function setDeleteButtonsLoading(id, isLoading) {
+  document.querySelectorAll("[data-delete-id]").forEach((button) => {
+    if (button.dataset.deleteId !== id) return;
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
+    button.disabled = isLoading;
+    button.textContent = isLoading ? "删除中..." : button.dataset.originalText || "删除";
+  });
+}
+
+function getOwnRecordIds() {
+  try {
+    const value = JSON.parse(localStorage.getItem(OWN_RECORD_IDS_KEY) || "[]");
+    return Array.isArray(value) ? value.map(String) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveOwnRecordIds(ids) {
+  try {
+    localStorage.setItem(OWN_RECORD_IDS_KEY, JSON.stringify([...new Set(ids.map(String))]));
+  } catch (error) {
+    // 本地存储不可用时，删除入口会在刷新后消失，不影响线上数据。
+  }
+}
+
+function markOwnRecord(id) {
+  saveOwnRecordIds([...getOwnRecordIds(), id]);
+}
+
+function unmarkOwnRecord(id) {
+  saveOwnRecordIds(getOwnRecordIds().filter((item) => item !== String(id)));
+}
+
+function isOwnRecord(record) {
+  return getOwnRecordIds().includes(String(record.id));
 }
 
 function getBestMatch(record) {
