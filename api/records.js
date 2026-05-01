@@ -16,6 +16,11 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    if (req.method === "DELETE") {
+      await handleDelete(req, res);
+      return;
+    }
+
     sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {
     sendJson(res, 500, { error: "Records API failed", detail: safeErrorText(error.message) });
@@ -67,6 +72,32 @@ async function handleCreate(req, res) {
 
   const rows = JSON.parse(text || "[]");
   sendJson(res, 200, { record: fromSupabaseRow(rows[0]) });
+}
+
+async function handleDelete(req, res) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    sendJson(res, 503, { error: "Missing Supabase environment variables", fallback: true });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const id = String(body.id || "").trim();
+  if (!id) {
+    sendJson(res, 400, { error: "Missing record id" });
+    return;
+  }
+
+  const response = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    sendJson(res, response.status, { error: "Supabase delete failed", detail: safeErrorText(text), fallback: true });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true });
 }
 
 function getSupabaseConfig() {
