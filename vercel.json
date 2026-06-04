@@ -1,51 +1,28 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "style.css",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "script.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "api/analyze-image.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/records.js",
-      "use": "@vercel/node"
-    }
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "style.css", "use": "@vercel/static" },
+    { "src": "script.js", "use": "@vercel/static" },
+    { "src": "api/analyze-image.js", "use": "@vercel/node" },
+    { "src": "api/records.js", "use": "@vercel/node" },
+    { "src": "api/auth.js", "use": "@vercel/node" },
+    { "src": "api/structured-input.js", "use": "@vercel/node" },
+    { "src": "api/notify.js", "use": "@vercel/node" },
+    { "src": "api/custody.js", "use": "@vercel/node" },
+    { "src": "api/upload-image.js", "use": "@vercel/node" }
   ],
   "routes": [
-    {
-      "src": "/api/analyze-image",
-      "dest": "/api/analyze-image.js"
-    },
-    {
-      "src": "/api/records",
-      "dest": "/api/records.js"
-    },
-    {
-      "src": "/style.css",
-      "dest": "/style.css"
-    },
-    {
-      "src": "/script.js",
-      "dest": "/script.js"
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "src": "/api/analyze-image", "dest": "/api/analyze-image.js" },
+    { "src": "/api/records", "dest": "/api/records.js" },
+    { "src": "/api/auth", "dest": "/api/auth.js" },
+    { "src": "/api/structured-input", "dest": "/api/structured-input.js" },
+    { "src": "/api/notify", "dest": "/api/notify.js" },
+    { "src": "/api/custody", "dest": "/api/custody.js" },
+    { "src": "/api/upload-image", "dest": "/api/upload-image.js" },
+    { "src": "/style.css", "dest": "/style.css" },
+    { "src": "/script.js", "dest": "/script.js" },
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

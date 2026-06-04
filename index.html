@@ -2,72 +2,93 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>校园失物招领 AI 智能匹配程序</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0071e3" />
+    <title>拾寻 · 城市拾遗网络</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- 顶部 Toast 通知容器 -->
+    <div class="toast-host" id="toastHost" aria-live="polite"></div>
+
+    <!-- 使用说明提示条 -->
+    <div class="info-banner" id="infoBanner">
+      <div class="info-banner-content">
+        <span class="info-banner-icon">💡</span>
+        <span class="info-banner-text">新用户？使用说明：发布失物/招领信息 → AI自动匹配 → 实名认证后查看联系方式 → 联系对方取回物品</span>
+      </div>
+      <button class="info-banner-close" id="closeInfoBanner" type="button" aria-label="关闭">×</button>
+    </div>
+
     <div class="app-shell">
+      <!-- ============== 侧边导航（桌面） ============== -->
       <aside class="side-nav" aria-label="主导航">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">拾</div>
           <div>
-            <h1>校园拾寻</h1>
-            <p>AI 智能匹配</p>
+            <h1>拾寻</h1>
+            <p>城市拾遗网络</p>
           </div>
         </div>
         <nav class="nav-list">
           <button class="nav-item is-active" data-view-target="home" type="button">
-            <span class="nav-icon" aria-hidden="true">⌂</span>
-            <span>失物广场</span>
-          </button>
-          <button class="nav-item" data-view-target="match" type="button">
-            <span class="nav-icon" aria-hidden="true">◎</span>
-            <span>AI 匹配</span>
+            <span class="nav-icon" aria-hidden="true">⌂</span><span>失物广场</span>
           </button>
           <button class="nav-item" data-view-target="publish" type="button">
-            <span class="nav-icon" aria-hidden="true">＋</span>
-            <span>发布信息</span>
+            <span class="nav-icon" aria-hidden="true">＋</span><span>智能发布</span>
+          </button>
+          <button class="nav-item" data-view-target="match" type="button">
+            <span class="nav-icon" aria-hidden="true">◎</span><span>AI 匹配</span>
+          </button>
+          <button class="nav-item" data-view-target="notify" type="button">
+            <span class="nav-icon" aria-hidden="true">♪</span>
+            <span>消息<span class="badge-dot" id="notifyBadge" hidden></span></span>
+          </button>
+          <button class="nav-item" data-view-target="profile" type="button">
+            <span class="nav-icon" aria-hidden="true">◉</span><span>我的</span>
           </button>
           <button class="nav-item" data-view-target="stats" type="button">
-            <span class="nav-icon" aria-hidden="true">▦</span>
-            <span>数据概览</span>
+            <span class="nav-icon" aria-hidden="true">▦</span><span>数据概览</span>
           </button>
         </nav>
-          <div class="side-note">
-          <strong>算法能力</strong>
-          <p>融合文本、地点、时间、图片视觉特征与视觉模型语义识别，生成可解释匹配分数。</p>
-        </div>
+
       </aside>
 
+      <!-- ============== 主内容区 ============== -->
       <main class="content">
         <header class="top-bar">
           <div>
-            <p class="eyebrow">Campus Lost & Found</p>
-            <h2>校园失物招领 AI 智能匹配程序</h2>
+            <p class="eyebrow">拾寻 · 城市失物招领平台</p>
+            <h2>城市拾遗网络</h2>
           </div>
-          <button class="primary-action" data-view-target="publish" type="button">发布</button>
+          <div class="top-bar-actions">
+            <button class="ghost-button" id="topVerifyBtn" type="button" hidden>实名认证</button>
+            <button class="primary-action" id="topAuthBtn" type="button">微信登录</button>
+          </div>
         </header>
 
         <section class="mobile-title" aria-label="移动端标题">
           <div class="mobile-brand-mark" aria-hidden="true">拾</div>
-          <div>
-            <h1>校园拾寻</h1>
-            <p>失物招领 AI 智能匹配</p>
+          <div class="mobile-title-text">
+            <h1>拾寻</h1>
+            <p>城市拾遗网络</p>
           </div>
+          <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
         </section>
 
+        <!-- ============== 视图：失物广场 ============== -->
         <section class="view is-active" id="view-home" aria-labelledby="home-heading">
           <div class="section-head">
             <div>
-              <h3 id="home-heading">失物广场</h3>
-              <p>浏览校园内发布的失物和招领信息，系统会自动标记高匹配线索。</p>
+              <h3 id="home-heading">失物广场 <span class="scope-badge">📍 上海市全域</span></h3>
+              <p>上海市全域失物与招领信息共享平台</p>
             </div>
             <div class="filter-group" role="group" aria-label="信息筛选">
               <button class="chip is-active" data-filter="all" type="button">全部</button>
-              <button class="chip" data-filter="lost" type="button">失物</button>
+              <button class="chip" data-filter="lost" type="button">寻物</button>
               <button class="chip" data-filter="found" type="button">招领</button>
               <button class="chip" data-filter="hot" type="button">高匹配</button>
+              <button class="chip" data-filter="institution" type="button">官方</button>
             </div>
           </div>
           <div class="search-row">
@@ -78,40 +99,43 @@
               <option value="电子设备">电子设备</option>
               <option value="生活用品">生活用品</option>
               <option value="学习用品">学习用品</option>
+              <option value="箱包">箱包</option>
               <option value="钥匙">钥匙</option>
+              <option value="贵重物品">贵重物品</option>
+              <option value="其他">其他</option>
             </select>
           </div>
           <div class="card-grid" id="itemList"></div>
         </section>
 
-        <section class="view" id="view-match" aria-labelledby="match-heading">
-          <div class="section-head">
-            <div>
-              <h3 id="match-heading">AI 智能匹配</h3>
-              <p>选择一条失物或招领信息，程序会重新计算候选匹配项并解释文本、时空、图像和语义分数来源。</p>
-            </div>
-          </div>
-          <div class="match-layout">
-            <div class="match-control">
-              <label for="queryRecord">待匹配信息</label>
-              <select id="queryRecord"></select>
-              <div class="selected-card" id="selectedRecord"></div>
-              <div class="score-note">
-                <strong>当前权重</strong>
-                <span>类别 13% · 颜色 8% · 地点 14% · 时间 11% · 文本 14% · 图像 20% · 语义 20%</span>
-              </div>
-            </div>
-            <div class="match-results" id="matchResults"></div>
-          </div>
-        </section>
-
+        <!-- ============== 视图：智能发布 ============== -->
         <section class="view" id="view-publish" aria-labelledby="publish-heading">
           <div class="section-head">
             <div>
-              <h3 id="publish-heading">发布信息</h3>
-              <p>上传图片后，浏览器会提取视觉特征，并尝试调用视觉模型识别物品语义标签。</p>
+              <h3 id="publish-heading">智能发布</h3>
+              <p>说一句话描述你的物品，AI 自动整理为结构化信息。也可手动调整每个字段。</p>
             </div>
           </div>
+
+          <!-- AI 智能输入框 -->
+          <div class="ai-input-card">
+            <label class="ai-input-label" for="aiInput">
+              <span class="ai-input-icon" aria-hidden="true">✦</span>
+              <span>AI 智能输入（推荐）</span>
+            </label>
+            <textarea
+              id="aiInput"
+              rows="3"
+              placeholder="例如：昨天下午3点左右在南京东路地铁站丢了一个黑色双肩包，里面有笔记本电脑和一串钥匙"
+            ></textarea>
+            <div class="ai-input-actions">
+              <button class="primary-action" id="aiExtractBtn" type="button">
+                <span class="ai-extract-text">让 AI 自动填表</span>
+              </button>
+              <span class="ai-input-hint" id="aiExtractHint">支持自然语言，AI 会自动识别类型、地点、时间和类别</span>
+            </div>
+          </div>
+
           <form class="publish-form" id="publishForm">
             <div class="form-row segmented" role="group" aria-label="发布类型">
               <label>
@@ -123,10 +147,34 @@
                 <span>我捡到了物品</span>
               </label>
             </div>
+
+            <!-- 物品状态选择器（仅 found 时显示） -->
+            <div class="item-status-group" id="itemStatusGroup" hidden>
+              <label class="form-label">物品当前位置</label>
+              <div class="status-options">
+                <label class="status-option">
+                  <input type="radio" name="item_status" value="in_place" />
+                  <span><strong>📍 仍在原地</strong><small>提供导航，目击者可查看</small></span>
+                </label>
+                <label class="status-option">
+                  <input type="radio" name="item_status" value="custody" checked />
+                  <span><strong>🤝 我代为保管</strong><small>可联系我，或寄存到代保管点</small></span>
+                </label>
+                <label class="status-option">
+                  <input type="radio" name="item_status" value="institution" />
+                  <span><strong>🏛️ 已交公共机构</strong><small>派出所/地铁站/物业等</small></span>
+                </label>
+                <label class="status-option">
+                  <input type="radio" name="item_status" value="unknown" />
+                  <span><strong>❓ 不确定</strong><small>仅作信息记录</small></span>
+                </label>
+              </div>
+            </div>
+
             <div class="form-grid">
               <label>
                 物品名称
-                <input name="title" required placeholder="例如：蓝色水杯" />
+                <input name="title" required placeholder="例如：黑色双肩包" />
               </label>
               <label>
                 物品类别
@@ -135,7 +183,10 @@
                   <option value="电子设备">电子设备</option>
                   <option value="生活用品">生活用品</option>
                   <option value="学习用品">学习用品</option>
+                  <option value="箱包">箱包</option>
                   <option value="钥匙">钥匙</option>
+                  <option value="贵重物品">贵重物品</option>
+                  <option value="其他">其他</option>
                 </select>
               </label>
               <label>
@@ -148,40 +199,43 @@
                   <option value="黄色">黄色</option>
                   <option value="绿色">绿色</option>
                   <option value="银色">银色</option>
+                  <option value="灰色">灰色</option>
+                  <option value="粉色">粉色</option>
                   <option value="透明">透明</option>
                 </select>
               </label>
               <label>
-                地点
-                <select name="location" required>
-                  <option value="图书馆一楼">图书馆一楼</option>
-                  <option value="图书馆三楼">图书馆三楼</option>
-                  <option value="一食堂">一食堂</option>
-                  <option value="二食堂">二食堂</option>
-                  <option value="教学楼A区">教学楼A区</option>
-                  <option value="教学楼B区">教学楼B区</option>
-                  <option value="操场看台">操场看台</option>
-                  <option value="宿舍区门口">宿舍区门口</option>
-                </select>
+                地点（精确）
+                <input name="location" required placeholder="例如：南京东路地铁站 5 号口" />
               </label>
               <label>
-                时间
+                丢失/捡到时间
                 <input name="time" type="datetime-local" required />
+                <small style="color:var(--text2);font-size:12px;">请填写物品实际丢失或捡到的时间，不是发布时间</small>
               </label>
               <label>
-                联系方式
-                <input name="contact" required placeholder="微信 / 手机 / 班级群" />
+                联系方式（实名后对方可见）
+                <input name="contact" required placeholder="微信 / 手机号" />
               </label>
             </div>
             <label class="wide-label">
-              描述
-              <textarea name="description" rows="4" required placeholder="补充品牌、外观、特殊标记、可能遗失位置等"></textarea>
+              详细描述
+              <textarea name="description" rows="3" required placeholder="补充品牌、外观、特殊标记、可能遗失位置等"></textarea>
             </label>
+
+            <!-- 代保管点选择器（item_status=custody 时显示） -->
+            <div class="custody-picker" id="custodyPicker" hidden>
+              <label class="form-label">寄存到代保管点（可选，让失主无需见面取回）</label>
+              <select name="custody_point_id" id="custodyPointSelect">
+                <option value="">不寄存，等失主联系</option>
+              </select>
+            </div>
+
             <div class="upload-zone">
               <label class="upload-card" id="dropZone">
                 <input id="imageInput" name="image" type="file" accept="image/*" />
                 <span>拖入或选择图片</span>
-                <small>支持 JPG / PNG / WebP，用于提取视觉特征与语义标签</small>
+                <small>支持 JPG / PNG / WebP，AI 会自动识别物品语义</small>
               </label>
               <div class="image-preview" id="imagePreview">
                 <span>暂无图片</span>
@@ -195,66 +249,217 @@
           </form>
         </section>
 
+        <!-- ============== 视图：AI 匹配 ============== -->
+        <section class="view" id="view-match" aria-labelledby="match-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="match-heading">AI 智能匹配</h3>
+              <p>从你发布的或选中的信息出发，AI 在 7 个维度计算候选匹配项并解释来源。</p>
+            </div>
+          </div>
+          <div class="match-layout">
+            <div class="match-control">
+              <label for="queryRecord">待匹配信息</label>
+              <select id="queryRecord"></select>
+              <div class="selected-card" id="selectedRecord"></div>
+              <div class="score-note">
+                <strong>权重</strong>
+                <span>类别 13% · 颜色 8% · 地点 14% · 时间 11% · 文本 14% · 图像 20% · 语义 20%</span>
+              </div>
+            </div>
+            <div class="match-results" id="matchResults"></div>
+          </div>
+        </section>
+
+        <!-- ============== 视图：消息中心 ============== -->
+        <section class="view" id="view-notify" aria-labelledby="notify-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="notify-heading">消息中心</h3>
+              <p>匹配成功、代保管寄存、取件提醒、信用变更都会在这里实时通知（每 8 秒轮询）。</p>
+            </div>
+            <button class="ghost-button" id="markAllReadBtn" type="button">全部已读</button>
+          </div>
+          <div class="notify-list" id="notifyList">
+            <div class="empty-state">暂无消息，发布信息后系统会自动推送匹配线索。</div>
+          </div>
+        </section>
+
+        <!-- ============== 视图：我的 ============== -->
+        <section class="view" id="view-profile" aria-labelledby="profile-heading">
+          <div class="section-head">
+            <div>
+              <h3 id="profile-heading">我的</h3>
+              <p>账号信息、信用积分、徽章、实名认证、我发布的记录。</p>
+            </div>
+          </div>
+          <div id="profileContent"></div>
+        </section>
+
+        <!-- ============== 视图：数据概览 ============== -->
         <section class="view" id="view-stats" aria-labelledby="stats-heading">
           <div class="section-head">
             <div>
               <h3 id="stats-heading">数据概览</h3>
-              <p>用于课堂展示项目价值和算法运行结果。</p>
+              <p>系统价值与算法运行结果。</p>
             </div>
           </div>
           <div class="metric-grid" id="metricGrid"></div>
           <div class="explain-panel">
-            <h4>混合匹配算法</h4>
+            <h4>v2 核心创新</h4>
             <div class="algorithm-grid">
               <div>
-                <strong>文本语义线索</strong>
-                <p>类别、颜色、描述关键词、字符 n-gram 相似度。</p>
+                <strong>AI 自然语言结构化</strong>
+                <p>说一句话，AI 自动提取类型/类别/颜色/地点/时间/描述。</p>
               </div>
               <div>
-                <strong>时空线索</strong>
-                <p>校园地点关联度与丢失/拾到时间间隔。</p>
+                <strong>三层隐私模糊化</strong>
+                <p>位置→XX路附近、时间→上午/下午、描述→保留前 20 字，实名握手后解锁。</p>
               </div>
               <div>
-                <strong>图像低层特征</strong>
-                <p>主色、颜色直方图、感知哈希的综合相似度。</p>
+                <strong>物品状态分流</strong>
+                <p>原地/代保管/已交机构/不确定，不同状态走不同流程。</p>
               </div>
               <div>
-                <strong>视觉模型语义识别</strong>
-                <p>服务端安全调用 SiliconFlow 图像理解模型，提取物品名称、类别、品牌、可见文字和外观特征。</p>
+                <strong>代保管节点 + 取件码</strong>
+                <p>对接便利店/丰巢/物业，6 位防混淆取件码安全交接。</p>
               </div>
               <div>
-                <strong>可解释输出</strong>
-                <p>显示总分、单项分数和匹配理由，便于人工判断。</p>
+                <strong>公共机构对接</strong>
+                <p>派出所/地铁失物中心/机场，"官方认证"标签可信。</p>
+              </div>
+              <div>
+                <strong>信用积分 + 徽章</strong>
+                <p>归还+10 / 发布+5 / 举报-20，城市好心人成长体系。</p>
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      <aside class="inspector" aria-label="匹配提醒">
+      <!-- ============== 右侧检查面板（桌面） ============== -->
+      <aside class="inspector" aria-label="高匹配提醒">
         <div class="inspector-card">
           <h3>高匹配提醒</h3>
           <div id="topAlerts"></div>
         </div>
-        <div class="inspector-card">
-          <h3>能力边界</h3>
-          <p>上传图片时会优先调用视觉模型做语义识别；如果服务端或密钥不可用，则保留本地视觉特征匹配。</p>
-        </div>
+
       </aside>
     </div>
 
+    <!-- 底部 Tab（移动端） -->
     <nav class="bottom-tabs" aria-label="移动端导航">
-      <button class="tab-item is-active" data-view-target="home" type="button">首页</button>
-      <button class="tab-item" data-view-target="match" type="button">匹配</button>
-      <button class="tab-item" data-view-target="publish" type="button">发布</button>
-      <button class="tab-item" data-view-target="stats" type="button">我的</button>
+      <button class="tab-item is-active" data-view-target="home" type="button">
+        <span class="tab-icon">⌂</span><span>首页</span>
+      </button>
+      <button class="tab-item" data-view-target="publish" type="button">
+        <span class="tab-icon">＋</span><span>发布</span>
+      </button>
+      <button class="tab-item" data-view-target="notify" type="button">
+        <span class="tab-icon">♪</span><span>消息<span class="badge-dot" id="notifyBadgeMobile" hidden></span></span>
+      </button>
+      <button class="tab-item" data-view-target="profile" type="button">
+        <span class="tab-icon">◉</span><span>我的</span>
+      </button>
     </nav>
 
+    <!-- 详情弹窗 -->
     <dialog id="detailDialog" class="detail-dialog">
       <button class="dialog-close" id="closeDialog" type="button" aria-label="关闭">×</button>
       <div id="detailContent"></div>
     </dialog>
 
-    <script src="script.js"></script>
+    <!-- 微信登录弹窗（Mock） -->
+    <dialog id="loginDialog" class="login-dialog">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="wechat-icon" aria-hidden="true">微</div>
+          <h3>微信登录</h3>
+          <p>请填写昵称完成登录</p>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label>
+            <span>昵称</span>
+            <input name="nickname" placeholder="留空将自动生成" autocomplete="off" />
+          </label>
+          <label>
+            <span>头像（选填，emoji 或 URL）</span>
+            <input name="avatar_url" placeholder="😀 或 https://..." autocomplete="off" />
+          </label>
+          <div class="login-actions">
+            <button type="button" class="ghost-button" id="loginGuestBtn">游客登录</button>
+            <button type="submit" class="primary-action wechat-action">确认登录</button>
+          </div>
+          <button type="button" class="text-button" id="closeLoginBtn">关闭</button>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- 实名认证弹窗（Mock） -->
+    <dialog id="verifyDialog" class="login-dialog">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="verify-icon" aria-hidden="true">✓</div>
+          <h3>实名认证</h3>
+          <p>请输入真实姓名和身份证末 4 位完成认证</p>
+        </div>
+        <form id="verifyForm" class="login-form">
+          <label>
+            <span>真实姓名</span>
+            <input name="real_name" required placeholder="请输入姓名" />
+          </label>
+          <label>
+            <span>身份证末 4 位</span>
+            <input name="id_card_last4" required pattern="\d{4}" maxlength="4" placeholder="0000" />
+          </label>
+          <div class="login-actions">
+            <button type="button" class="text-button" id="closeVerifyBtn">取消</button>
+            <button type="submit" class="primary-action">提交认证</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- 用户信息弹窗 -->
+    <dialog id="userDialog" class="login-dialog">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="profile-avatar" id="userDialogAvatar" aria-hidden="true">?</div>
+          <h3 id="userDialogNickname">用户</h3>
+          <p id="userDialogStatus">未实名认证</p>
+        </div>
+        <div class="user-dialog-body">
+          <div class="user-dialog-info" id="userDialogInfo"></div>
+          <div class="login-actions" style="flex-direction:column;gap:10px;margin-top:16px;">
+            <button type="button" class="primary-action" id="userDialogVerifyBtn">完成实名认证</button>
+            <button type="button" class="ghost-button" id="userDialogLogoutBtn" style="color:var(--red);">退出登录</button>
+            <button type="button" class="text-button" id="closeUserBtn">关闭</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- 取件码弹窗 -->
+    <dialog id="pickupDialog" class="login-dialog">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="pickup-icon" aria-hidden="true">🔑</div>
+          <h3>代保管取件</h3>
+          <p>请输入失主提供的取件码，确认领取物品。</p>
+        </div>
+        <form id="pickupForm" class="login-form">
+          <label>
+            <span>取件码（格式 XX-XXXX）</span>
+            <input name="pickup_code" required placeholder="AB-1234" />
+          </label>
+          <div class="login-actions">
+            <button type="button" class="text-button" id="closePickupBtn">取消</button>
+            <button type="submit" class="primary-action">确认取件</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <script src="script.js?v=5"></script>
   </body>
 </html>

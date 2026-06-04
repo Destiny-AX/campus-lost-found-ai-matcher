@@ -1,5 +1,12 @@
 "use strict";
 
+const {
+  getSiliconFlowApiKey,
+  readJsonBody,
+  sendJson,
+  safeErrorText,
+} = require("./_shared");
+
 const MODEL = process.env.SILICON_FLOW_MODEL || "Qwen/Qwen3-VL-8B-Instruct";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
 
@@ -26,13 +33,13 @@ module.exports = async function handler(req, res) {
   }
 
   const prompt = [
-    "你是校园失物招领系统中的图片语义识别模块。",
+    "你是城市失物招领系统中的图片语义识别模块。",
     "请只输出 JSON，不要解释，不要 Markdown。",
     "从图片中识别物品，用于后续失物与招领匹配。",
     "字段要求：",
     "{",
-    '  "object_name": "最可能的物品名称，例如 无线耳机盒/校园卡/钥匙串",',
-    '  "category": "证件/电子设备/生活用品/学习用品/钥匙/其他",',
+    '  "object_name": "最可能的物品名称，例如 无线耳机盒/身份证/钥匙串",',
+    '  "category": "证件/电子设备/生活用品/学习用品/钥匙/箱包/贵重物品/其他",',
     '  "colors": ["主要颜色"],',
     '  "brand_guess": "可见品牌或未知",',
     '  "visible_text": ["图片中可见文字，无法识别则空数组"],',
@@ -41,6 +48,9 @@ module.exports = async function handler(req, res) {
     "}",
     "confidence 使用 0 到 1 的数字。",
   ].join("\n");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
 
   let response;
   try {
@@ -65,8 +75,10 @@ module.exports = async function handler(req, res) {
         max_tokens: 600,
         response_format: { type: "json_object" },
       }),
+      signal: controller.signal,
     });
   } catch (error) {
+    clearTimeout(timeout);
     sendJson(res, 502, {
       error: "SiliconFlow request unavailable",
       detail: safeErrorText(error.message),
@@ -74,6 +86,7 @@ module.exports = async function handler(req, res) {
     });
     return;
   }
+  clearTimeout(timeout);
 
   const raw = await response.text();
   if (!response.ok) {
@@ -100,40 +113,6 @@ module.exports = async function handler(req, res) {
     });
   }
 };
-
-function getSiliconFlowApiKey() {
-  return (
-    process.env.LOST_FOUND_SILICON_FLOW_API_KEY ||
-    process.env.silicon_flow_api_key ||
-    process.env.SILICON_FLOW_API_KEY ||
-    process.env.SILICONFLOW_API_KEY ||
-    ""
-  ).trim();
-}
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === "object") return req.body;
-  if (typeof req.body === "string") {
-    try {
-      return JSON.parse(req.body);
-    } catch (error) {
-      return {};
-    }
-  }
-
-  return new Promise((resolve) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
-      } catch (error) {
-        resolve({});
-      }
-    });
-    req.on("error", () => resolve({}));
-  });
-}
 
 function parsePossiblyFencedJson(value) {
   const text = String(value || "").trim();
@@ -167,14 +146,4 @@ function toArray(value) {
 function clampNumber(value, min, max, fallback) {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
-}
-
-function safeErrorText(value) {
-  return String(value || "").slice(0, 1200);
-}
-
-function sendJson(res, status, payload) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(payload));
 }
