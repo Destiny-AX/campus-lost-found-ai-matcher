@@ -105,3 +105,50 @@ create table if not exists public.shiyun_credit_logs (
 
 create index if not exists shiyun_credit_logs_user_idx
   on public.shiyun_credit_logs (user_id, created_at desc);
+
+-- ============== v3 升级：用户成长体系字段 ==============
+alter table public.shiyun_users add column if not exists level int default 1;
+alter table public.shiyun_users add column if not exists exp int default 0;
+alter table public.shiyun_users add column if not exists total_published int default 0;
+alter table public.shiyun_users add column if not exists total_helped int default 0;
+alter table public.shiyun_users add column if not exists streak_days int default 0;
+alter table public.shiyun_users add column if not exists last_active_date text default '';
+
+-- ============== v3 升级：记录表地点结构化字段 ==============
+alter table public.lost_found_records add column if not exists city text default '上海市';
+alter table public.lost_found_records add column if not exists district text default '';
+alter table public.lost_found_records add column if not exists street text default '';
+alter table public.lost_found_records add column if not exists detail_location text default '';
+
+-- ============== v3 升级：记录表认领相关字段 ==============
+alter table public.lost_found_records add column if not exists claim_question text default '';
+alter table public.lost_found_records add column if not exists claim_answer text default '';
+alter table public.lost_found_records add column if not exists claimed_by text default '';
+alter table public.lost_found_records add column if not exists claimed_at timestamptz;
+
+-- ============== v3 升级：评价表 ==============
+create table if not exists public.shiyun_reviews (
+  id text primary key,
+  record_id text not null,
+  from_user_id text not null,
+  to_user_id text not null,
+  rating int check (rating between 1 and 5),
+  comment text default '',
+  created_at timestamptz default now()
+);
+
+create index if not exists shiyun_reviews_record_idx on public.shiyun_reviews (record_id);
+create index if not exists shiyun_reviews_to_user_idx on public.shiyun_reviews (to_user_id);
+
+-- ============== v3 升级：认领申请表 ==============
+create table if not exists public.shiyun_claim_requests (
+  id text primary key,
+  record_id text not null,
+  claimant_id text not null,
+  answer text default '',
+  status text default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz default now()
+);
+
+create index if not exists shiyun_claim_requests_record_idx on public.shiyun_claim_requests (record_id);
+create index if not exists shiyun_claim_requests_claimant_idx on public.shiyun_claim_requests (claimant_id);

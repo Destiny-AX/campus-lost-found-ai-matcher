@@ -1,11 +1,31 @@
 "use strict";
 
 // ============================================================
-// 拾寻 v2 — 城市拾遗网络 前端核心逻辑
+// 拾寻 v3 — 城市拾遗网络 前端核心逻辑
 // ============================================================
 
 // ============== 常量与配置 ==============
 const WEIGHTS = { category: 0.13, color: 0.08, location: 0.14, time: 0.11, text: 0.14, image: 0.2, semantic: 0.2 };
+
+// 等级称号映射
+const LEVEL_TITLES = {
+  1: "拾遗新手", 2: "拾遗新手",
+  3: "热心市民", 4: "热心市民",
+  5: "城市好心人", 6: "城市好心人",
+  7: "拾金不昧达人", 8: "拾金不昧达人",
+  9: "城市守护者", 10: "城市守护者",
+};
+
+// 徽章稀有度颜色
+const BADGE_RARITY = {
+  "🌱 新手上路": "common",
+  "✅ 实名认证": "rare",
+  "📝 初次发布": "common",
+  "🎯 匹配达人": "rare",
+  "🤝 助人为乐": "epic",
+  "🔥 连续活跃": "rare",
+  "🏆 城市守护者": "legendary",
+};
 
 const colorMap = {
   黑色: [26, 30, 38], 白色: [238, 240, 235], 蓝色: [54, 105, 201],
@@ -25,6 +45,26 @@ const locationGroups = {
   "徐家汇": ["中山公园", "上海南站"], "外滩": ["南京东路", "陆家嘴"],
   "陆家嘴": ["外滩", "世纪大道"], "世纪大道": ["陆家嘴", "张江"],
   "张江": ["世纪大道"], "上海南站": ["徐家汇"], "上海火车站": ["人民广场"],
+};
+
+// 区→街道映射（v3 地域结构化）
+const STREET_DATA = {
+  "黄浦区": ["南京东路", "外滩", "人民广场", "淮海中路", "豫园", "新天地", "老西门"],
+  "静安区": ["静安寺", "南京西路", "曹家渡", "石门二路", "江宁路", "北站", "芷江西路"],
+  "徐汇区": ["徐家汇", "衡山路", "漕河泾", "龙华", "长桥", "康健新村", "田林"],
+  "长宁区": ["中山公园", "虹桥", "新华路", "江苏路", "周家桥", "天山路", "仙霞新村"],
+  "普陀区": ["长寿路", "曹杨新村", "长风新村", "宜川路", "甘泉路", "石泉路", "真如"],
+  "虹口区": ["四川北路", "北外滩", "欧阳路", "广中路", "凉城新村", "江湾镇"],
+  "杨浦区": ["五角场", "控江路", "平凉路", "江浦路", "四平路", "长白新村", "殷行"],
+  "浦东新区": ["陆家嘴", "张江", "世纪大道", "金桥", "花木", "洋泾", "周浦", "康桥", "唐镇"],
+  "闵行区": ["莘庄", "七宝", "虹桥镇", "梅陇", "颛桥", "马桥", "吴泾", "浦江"],
+  "宝山区": ["淞宝", "大场", "杨行", "月浦", "罗店", "顾村", "高境", "庙行"],
+  "嘉定区": ["嘉定镇", "南翔", "安亭", "马陆", "江桥", "徐行", "外冈", "菊园新区"],
+  "金山区": ["石化", "朱泾", "枫泾", "亭林", "漕泾", "山阳", "金山卫", "张堰"],
+  "松江区": ["松江新城", "九亭", "泗泾", "佘山", "洞泾", "新桥", "车墩", "叶榭"],
+  "青浦区": ["青浦镇", "徐泾", "华新", "重固", "白鹤", "朱家角", "练塘", "金泽"],
+  "奉贤区": ["南桥", "奉浦", "庄行", "金汇", "青村", "柘林", "四团", "海湾"],
+  "崇明区": ["城桥", "堡镇", "新河", "庙镇", "竖新", "向化", "三星", "港西"],
 };
 
 const ITEM_STATUS_LABELS = {
@@ -66,13 +106,17 @@ const els = {};
 document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
   bindEvents();
+  bindLocationCascade();
   restoreAuth();
   records = await loadRecords();
   custodyPoints = await loadCustodyPoints();
   fillDefaultTime();
+  renderLocationFilters();
   renderAll();
   updateNotifyBadge(0);
   startNotifyPoll();
+  checkHighMatchAlerts();
+  checkUserStreak();
 
   // 检查使用说明提示条是否已关闭
   const infoBanner = document.querySelector('#infoBanner');
@@ -86,7 +130,7 @@ function cacheElements() {
   const ids = [
     "itemList", "searchInput", "categoryFilter", "queryRecord", "selectedRecord",
     "matchResults", "publishForm", "imageInput", "dropZone", "imagePreview",
-    "featurePreview", "metricGrid", "topAlerts", "detailDialog", "detailContent",
+    "featurePreview", "metricGrid", "detailDialog", "detailContent",
     "closeDialog", "topAuthBtn", "topVerifyBtn", "mobileAuthBtn",
     "loginDialog", "loginForm", "loginGuestBtn", "closeLoginBtn",
     "verifyDialog", "verifyForm", "closeVerifyBtn",
@@ -94,7 +138,8 @@ function cacheElements() {
     "aiInput", "aiExtractBtn", "aiExtractHint",
     "itemStatusGroup", "custodyPicker", "custodyPointSelect",
     "notifyList", "markAllReadBtn", "notifyBadge", "notifyBadgeMobile",
-    "profileContent", "toastHost",
+    "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
+    "filterDistrict", "filterStreet",
   ];
   ids.forEach((id) => { els[toCamel(id)] = document.querySelector(`#${id}`); });
   els.submitButton = els.publishForm?.querySelector(".submit-button");
@@ -124,6 +169,8 @@ function bindEvents() {
 
   on(els.searchInput, "input", renderItemList);
   on(els.categoryFilter, "change", renderItemList);
+  on(els.filterDistrict, "change", () => { renderLocationStreets(); renderItemList(); });
+  on(els.filterStreet, "change", renderItemList);
   on(els.queryRecord, "change", renderMatchView);
   on(els.imageInput, "change", handleImageUpload);
   bindDropUpload();
@@ -449,22 +496,26 @@ function renderAll() {
   renderQueryOptions();
   renderMatchView();
   renderStats();
-  renderTopAlerts();
   renderCustodyOptions();
+  renderUserStatusBar();
 }
 
 function renderItemList() {
   const query = normalizeText(els.searchInput.value);
   const category = els.categoryFilter.value;
+  const district = els.filterDistrict?.value || "all";
+  const street = els.filterStreet?.value || "all";
   let list = records.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
   list = list.filter((r) => {
     const haystack = normalizeText(`${r.title}${r.category}${r.color}${r.location}${r.description}`);
     const matchesSearch = !query || haystack.includes(query);
     const matchesCategory = category === "all" || r.category === category;
+    const matchesDistrict = district === "all" || r.district === district;
+    const matchesStreet = street === "all" || r.street === street;
     const matchesType = activeFilter === "all" || r.type === activeFilter ||
       (activeFilter === "hot" && getBestMatch(r).score >= 75) ||
       (activeFilter === "institution" && r.item_status === "institution");
-    return matchesSearch && matchesCategory && matchesType;
+    return matchesSearch && matchesCategory && matchesDistrict && matchesStreet && matchesType;
   });
   els.itemList.innerHTML = list.length
     ? list.map((r) => renderRecordCard(r)).join("")
@@ -614,16 +665,96 @@ function renderStats() {
     .map(([label, value]) => `<div class="metric-card"><strong>${label}</strong><span>${value}</span></div>`).join("");
 }
 
-function renderTopAlerts() {
-  const alerts = records
-    .flatMap((r) => getMatchesFor(r).slice(0, 1).map((m) => ({ source: r, ...m })))
-    .sort((a, b) => b.result.score - a.result.score).slice(0, 3);
-  els.topAlerts.innerHTML = alerts.map((a) => `
-    <div class="alert-item">
-      <strong>${escapeHtml(a.source.title)} ↔ ${escapeHtml(a.record.title)}</strong>
-      <span class="alert-score">${Math.round(a.result.score)}%</span>
-      <p>${escapeHtml(a.result.reasons.slice(0, 2).join("，"))}</p>
-    </div>`).join("");
+// ============== 地域筛选渲染 ==============
+function renderLocationFilters() {
+  const districtSelect = els.filterDistrict;
+  const streetSelect = els.filterStreet;
+  if (!districtSelect) return;
+  const districts = Object.keys(STREET_DATA);
+  districtSelect.innerHTML = '<option value="all">全部区</option>' +
+    districts.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+  renderLocationStreets();
+}
+
+function renderLocationStreets() {
+  const districtSelect = els.filterDistrict;
+  const streetSelect = els.filterStreet;
+  if (!districtSelect || !streetSelect) return;
+  const district = districtSelect.value;
+  if (district === "all") {
+    streetSelect.innerHTML = '<option value="all">全部街道</option>';
+    streetSelect.disabled = true;
+    return;
+  }
+  const streets = STREET_DATA[district] || [];
+  streetSelect.innerHTML = '<option value="all">全部街道</option>' +
+    streets.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  streetSelect.disabled = false;
+}
+
+function bindLocationCascade() {
+  const districtSelect = document.querySelector("#districtSelect");
+  const streetSelect = document.querySelector("#streetSelect");
+  if (!districtSelect || !streetSelect) return;
+  districtSelect.addEventListener("change", () => {
+    const district = districtSelect.value;
+    if (!district) {
+      streetSelect.innerHTML = '<option value="">请先选择区</option>';
+      return;
+    }
+    const streets = STREET_DATA[district] || [];
+    streetSelect.innerHTML = '<option value="">请选择街道</option>' +
+      streets.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  });
+}
+
+// ============== 浮动通知 ==============
+function showFloatNotify(title, body, actions = []) {
+  const host = els.floatNotifyHost;
+  if (!host) return;
+  const el = document.createElement("div");
+  el.className = "float-notify";
+  const actionsHtml = actions.map((a) => `<button class="ghost-button" type="button" data-action="${a.id}">${a.label}</button>`).join("");
+  el.innerHTML = `
+    <div class="float-notify-title">${escapeHtml(title)}</div>
+    <div class="float-notify-body">${escapeHtml(body)}</div>
+    ${actionsHtml ? `<div class="float-notify-actions">${actionsHtml}</div>` : ""}
+  `;
+  el.querySelectorAll("[data-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = actions.find((a) => a.id === btn.dataset.action);
+      if (action) action.handler();
+      el.classList.add("is-leaving");
+      setTimeout(() => el.remove(), 350);
+    });
+  });
+  host.appendChild(el);
+  setTimeout(() => {
+    if (el.parentNode) {
+      el.classList.add("is-leaving");
+      setTimeout(() => el.remove(), 350);
+    }
+  }, 8000);
+}
+
+function checkHighMatchAlerts() {
+  if (!currentUser) return;
+  const myLostRecords = records.filter((r) => r.owner_id === currentUser.sub && r.type === "lost" && r.status !== "已找回");
+  if (!myLostRecords.length) return;
+  const notifiedKey = "shiyun_notified_matches";
+  const notified = new Set(JSON.parse(localStorage.getItem(notifiedKey) || "[]"));
+  myLostRecords.forEach((r) => {
+    const best = getMatchesFor(r).slice(0, 1)[0];
+    if (best && best.result.score >= 75 && !notified.has(r.id)) {
+      notified.add(r.id);
+      showFloatNotify(
+        "🎯 高匹配提醒",
+        `你的「${r.title}」可能有匹配线索！匹配度 ${Math.round(best.result.score)}%`,
+        [{ id: "view", label: "查看匹配", handler: () => { els.queryRecord.value = r.id; switchView("match"); } }]
+      );
+    }
+  });
+  localStorage.setItem(notifiedKey, JSON.stringify([...notified]));
 }
 
 function renderCustodyOptions() {
@@ -675,6 +806,27 @@ function openDetail(id) {
     ? `<div class="pickup-code-display"><strong>取件码：</strong><code>${record.pickup_code}</code><small>请将取件码后半部分告知失主</small></div>`
     : "";
 
+  // 认领区域：非发布者且设置了认领问题时显示
+  let claimSection = "";
+  if (!isOwn && record.claim_question && !record.claimed_by) {
+    claimSection = `<div class="claim-section">
+      <div class="claim-question">🔒 认领验证：${escapeHtml(record.claim_question)}</div>
+      <input class="claim-answer-input" id="claimAnswer" placeholder="请回答上述问题" />
+      <button class="primary-action" id="claimBtn" type="button">申请认领</button>
+    </div>`;
+  } else if (!isOwn && record.claimed_by) {
+    claimSection = `<div class="claim-section"><div class="claim-question">✅ 该物品已被认领</div></div>`;
+  }
+
+  // 举报按钮
+  const reportLink = !isOwn ? `<button class="report-link" id="reportBtn" type="button">举报该信息</button>` : "";
+
+  // 评价按钮（认领完成后显示）
+  let reviewSection = "";
+  if (!isOwn && record.claimed_by && currentUser && (record.owner_id === currentUser.sub || record.claimed_by === currentUser.sub)) {
+    reviewSection = `<button class="ghost-button" id="reviewBtn" type="button">评价此次交易</button>`;
+  }
+
   els.detailContent.innerHTML = `
     <div class="detail-content">
       <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
@@ -687,12 +839,15 @@ function openDetail(id) {
         </div>
         ${verifyPrompt}
         <p>${escapeHtml(record.description)}</p>
+        ${claimSection}
         <div class="contact-section">
           <strong>联系方式：</strong>
           ${contactDisplay}
         </div>
         ${custodyInfo}${institutionInfo}${pickupInfo}
         ${ownActions ? `<div class="card-actions">${ownActions}</div>` : ""}
+        ${reviewSection}
+        <div style="text-align:right;margin-top:8px;">${reportLink}</div>
         ${renderSemanticBlock(record.semantic)}
         <div><strong>相似线索</strong><ul class="reason-list">${
           matches.length ? matches.map((m) => `<li>${escapeHtml(m.record.title)}：${Math.round(m.result.score)}%，${escapeHtml(m.result.reasons[0] || "存在相似特征")}</li>`).join("") : "<li>暂无候选匹配项</li>"
@@ -711,6 +866,28 @@ function openDetail(id) {
   els.detailContent.querySelectorAll(".view-contact-btn").forEach((btn) => {
     btn.addEventListener("click", () => showContactPrompt());
   });
+  // 认领按钮
+  const claimBtn = els.detailContent.querySelector("#claimBtn");
+  if (claimBtn) {
+    claimBtn.addEventListener("click", () => {
+      const answer = els.detailContent.querySelector("#claimAnswer")?.value?.trim();
+      if (!answer) { showToast("请回答问题", "error"); return; }
+      handleClaimRequest(record.id, answer);
+    });
+  }
+  // 举报按钮
+  const reportBtn = els.detailContent.querySelector("#reportBtn");
+  if (reportBtn) {
+    reportBtn.addEventListener("click", () => {
+      if (!confirm("确定举报该信息吗？恶意举报会影响您的信用分。")) return;
+      handleReport(record.id);
+    });
+  }
+  // 评价按钮
+  const reviewBtn = els.detailContent.querySelector("#reviewBtn");
+  if (reviewBtn) {
+    reviewBtn.addEventListener("click", () => openReviewDialog(record.id));
+  }
 }
 
 function showContactPrompt() {
@@ -765,12 +942,43 @@ function renderNotifyList() {
     els.notifyList.innerHTML = `<div class="empty-state">暂无消息，发布信息后系统会自动推送匹配线索。</div>`;
     return;
   }
-  els.notifyList.innerHTML = notifications.map((n) => `
-    <div class="notify-item${n.is_read ? " is-read" : ""}">
+  els.notifyList.innerHTML = notifications.map((n) => {
+    let actions = "";
+    if (n.type === "claim_request" && n.related_record_id) {
+      actions = `<div style="margin-top:8px;display:flex;gap:8px;">
+        <button class="ghost-button" type="button" data-claim="approve" data-record="${escapeHtml(n.related_record_id)}">同意</button>
+        <button class="ghost-button" type="button" data-claim="reject" data-record="${escapeHtml(n.related_record_id)}">拒绝</button>
+      </div>`;
+    }
+    return `<div class="notify-item${n.is_read ? " is-read" : ""}">
       <div class="notify-title">${escapeHtml(n.title)}</div>
       <div class="notify-body">${escapeHtml(n.body || "")}</div>
       <div class="notify-time">${formatTime(n.created_at)}</div>
-    </div>`).join("");
+      ${actions}
+    </div>`;
+  }).join("");
+
+  // 绑定认领审核按钮
+  els.notifyList.querySelectorAll("[data-claim]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const status = btn.dataset.claim;
+      const recordId = btn.dataset.record;
+      // 查找对应的认领申请ID（简化：通过记录ID找最新的pending申请）
+      try {
+        const resp = await fetch(`/api/records?action=review-claim`, {
+          method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ claim_id: `claim_${recordId}`, status }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast(status === "approved" ? "已同意认领申请" : "已拒绝认领申请", "success");
+          btn.parentElement.remove();
+        } else {
+          showToast(data.error || "操作失败", "error");
+        }
+      } catch (e) { showToast("操作失败", "error"); }
+    });
+  });
 }
 
 function startNotifyPoll() {
@@ -841,8 +1049,15 @@ function renderProfile() {
     return;
   }
   const verified = currentUser.verified;
-  const badges = verified ? ["✅ 实名认证用户"] : ["🌱 新手上路"];
-  const creditScore = verified ? 10 : 5;
+  const level = currentUser.level || 1;
+  const exp = currentUser.exp || 0;
+  const nextExp = Math.pow(level, 2) * 100;
+  const title = LEVEL_TITLES[level] || "拾遗新手";
+  const badges = currentUser.badges || ["🌱 新手上路"];
+  const creditScore = currentUser.credit_score || (verified ? 10 : 5);
+  const totalPublished = currentUser.total_published || 0;
+  const totalHelped = currentUser.total_helped || 0;
+  const streak = currentUser.streak_days || 0;
 
   const verifySection = verified
     ? `<div class="verify-status verified"><span>✅ 已完成实名认证</span><small>您可以查看完整联系方式</small></div>`
@@ -863,14 +1078,22 @@ function renderProfile() {
         <p>登录方式：${currentUser.provider === "wechat_mock" ? "微信" : "游客"}</p>
       </div>
     </div>
+    <div class="user-status-bar" style="margin:16px 0;">
+      <span class="status-avatar">${escapeHtml((currentUser.nickname || "?")[0])}</span>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span class="status-level">Lv.${level} ${title}</span>
+        <span class="status-exp">EXP ${exp}/${nextExp} · 连续 ${streak} 天</span>
+      </div>
+      <span style="font-size:12px;color:var(--text2);margin-left:auto;">已帮助 ${totalHelped} 人</span>
+    </div>
     <div class="profile-stats">
       <div class="metric-card"><strong>信用积分</strong><span>${creditScore}</span></div>
-      <div class="metric-card"><strong>发布数</strong><span>${myRecords.length}</span></div>
+      <div class="metric-card"><strong>发布数</strong><span>${totalPublished}</span></div>
       <div class="metric-card"><strong>徽章</strong><span>${badges.length}</span></div>
     </div>
     <div class="profile-badges">
       <h4>我的徽章</h4>
-      <div class="badge-list">${badges.map((b) => `<span class="badge-item">${b}</span>`).join("")}</div>
+      <div class="badge-list">${badges.map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}">${b}</span>`).join("")}</div>
     </div>
     ${verifySection}
     <div class="my-records-section">
@@ -972,14 +1195,19 @@ async function handlePublish(event) {
     }
     
     const imageFeature = uploadedFeature || (await extractImageFeatures(imageData));
+    const locationParts = [data.district, data.street, data.detail_location].filter(Boolean);
     const newRecord = {
       id: `record-${Date.now()}`, type: data.type, title: data.title.trim(),
-      category: data.category, color: data.color, location: data.location,
+      category: data.category, color: data.color,
+      city: data.city || "上海市", district: data.district || "", street: data.street || "",
+      detail_location: data.detail_location || "",
+      location: locationParts.join(" ") || data.district || "",
       time: data.time, contact: data.contact.trim(), description: data.description.trim(),
       status: data.type === "lost" ? "待找回" : "待认领",
       item_status: data.item_status || "unknown",
       custody_point_id: data.custody_point_id || "",
       owner_id: currentUser?.sub || "",
+      claim_question: data.claim_question?.trim() || "",
       imageData, imageFeature, semantic: uploadedSemantic || buildFallbackSemantic(data),
     };
 
@@ -1006,13 +1234,45 @@ async function handlePublish(event) {
       records.unshift(saved);
     }
 
+    // 增加经验值和徽章
+    let bestMatch = null;
+    if (currentUser) {
+      try {
+        bestMatch = getBestMatch(newRecord);
+        const expResp = await fetch("/api/auth?action=add-exp", {
+          method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ delta: 10, action: "publish" }),
+        });
+        const expData = await expResp.json();
+        if (expData.user) {
+          currentUser = { ...currentUser, ...expData.user };
+          if (expData.levelUp) {
+            showAchievementPopup("level_up", `升级啦！Lv.${expData.newLevel} ${LEVEL_TITLES[expData.newLevel] || "拾遗新手"}`);
+          }
+        }
+        // 首次发布徽章
+        const totalPublished = currentUser.total_published || 0;
+        if (totalPublished === 1) {
+          await unlockBadge("first_publish");
+        }
+        // 匹配达人徽章
+        if (bestMatch && bestMatch.score >= 80) {
+          await unlockBadge("match_master");
+        }
+        // 城市守护者徽章
+        if ((currentUser.level || 1) >= 7) {
+          await unlockBadge("guardian");
+        }
+      } catch (e) { /* 静默 */ }
+    }
+
     resetPublishForm();
     renderAll();
     els.queryRecord.value = newRecord.id;
     switchView("match");
 
     // 匹配成功时推送通知
-    const bestMatch = getBestMatch(newRecord);
+    if (!bestMatch) bestMatch = getBestMatch(newRecord);
     if (bestMatch.score >= 75 && currentUser) {
       try {
         await fetch("/api/notify?action=push", {
@@ -1483,3 +1743,184 @@ function normalizeText(v) { return String(v || "").toLowerCase().replace(/\s+/g,
 function cosineSimilarity(a, b) { let dot = 0, nA = 0, nB = 0; for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; nA += a[i] * a[i]; nB += b[i] * b[i]; } return (!nA || !nB) ? 0 : dot / (Math.sqrt(nA) * Math.sqrt(nB)); }
 function hammingDistance(a, b) { const len = Math.min(a.length, b.length); let d = 0; for (let i = 0; i < len; i++) if (a[i] !== b[i]) d++; return d + Math.abs(a.length - b.length); }
 function colorDistanceScore(a, b) { return clamp(1 - Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2) / 441.67, 0, 1); }
+
+// ============== 成就系统 ==============
+function showAchievementPopup(type, message, badgeEmoji = "") {
+  const host = els.floatNotifyHost;
+  if (!host) return;
+  const el = document.createElement("div");
+  el.className = "float-notify";
+  el.style.borderLeftColor = "var(--orange)";
+  const shareBtn = type === "badge" ? `<button class="ghost-button" type="button" data-action="share">分享到朋友圈</button>` : "";
+  el.innerHTML = `
+    <div class="float-notify-title">🏆 ${escapeHtml(message)}</div>
+    ${badgeEmoji ? `<div style="font-size:32px;text-align:center;margin:8px 0;">${badgeEmoji}</div>` : ""}
+    <div class="float-notify-actions">${shareBtn}<button class="ghost-button" type="button" data-action="close">知道了</button></div>
+  `;
+  el.querySelector("[data-action='close']")?.addEventListener("click", () => { el.classList.add("is-leaving"); setTimeout(() => el.remove(), 350); });
+  el.querySelector("[data-action='share']")?.addEventListener("click", () => { shareAchievement(type, message); el.classList.add("is-leaving"); setTimeout(() => el.remove(), 350); });
+  host.appendChild(el);
+  setTimeout(() => { if (el.parentNode) { el.classList.add("is-leaving"); setTimeout(() => el.remove(), 350); } }, 6000);
+}
+
+function shareAchievement(type, message) {
+  const text = `我在 #拾寻 城市失物招领平台达成了成就：${message}！\n帮助失物回到主人身边，让城市更温暖。\n快来一起参与吧 👇\n${window.location.href}`;
+  if (navigator.share) {
+    navigator.share({ title: "拾寻成就", text }).catch(() => {
+      copyToClipboard(text);
+      showToast("已复制分享内容到剪贴板", "success");
+    });
+  } else {
+    copyToClipboard(text);
+    showToast("已复制分享内容到剪贴板", "success");
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard?.writeText(text).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  });
+}
+
+async function unlockBadge(badgeKey) {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch("/api/auth?action=unlock-badge", {
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ badge: badgeKey }),
+    });
+    const data = await resp.json();
+    if (data.badgeLabel && !data.alreadyHad) {
+      const BADGE_EMOJI = { first_publish: "📝", match_master: "🎯", helper: "🤝", streak7: "🔥", guardian: "🏆" };
+      currentUser = { ...currentUser, badges: data.user?.badges || currentUser.badges };
+      showAchievementPopup("badge", `解锁新徽章：${data.badgeLabel}`, BADGE_EMOJI[badgeKey] || "🏆");
+    }
+  } catch (e) { /* 静默 */ }
+}
+
+async function checkUserStreak() {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch("/api/auth?action=check-streak", {
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+    });
+    const data = await resp.json();
+    if (data.unlockedStreakBadge) {
+      showAchievementPopup("badge", "解锁新徽章：🔥 连续活跃", "🔥");
+    }
+  } catch (e) { /* 静默 */ }
+}
+
+function renderUserStatusBar() {
+  const bar = els.userStatusBar;
+  if (!bar) return;
+  if (!currentUser) {
+    bar.innerHTML = `<span class="status-avatar">?</span><span class="status-level">登录后解锁成长体系</span>`;
+    bar.style.display = "flex";
+    return;
+  }
+  const level = currentUser.level || 1;
+  const exp = currentUser.exp || 0;
+  const nextExp = Math.pow(level, 2) * 100;
+  const title = LEVEL_TITLES[level] || "拾遗新手";
+  const badges = currentUser.badges || [];
+  bar.innerHTML = `
+    <span class="status-avatar">${escapeHtml((currentUser.nickname || "?")[0])}</span>
+    <span class="status-level">Lv.${level} ${title}</span>
+    <span class="status-exp">EXP ${exp}/${nextExp}</span>
+    <span class="status-badges">${badges.slice(0, 3).map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}" style="padding:2px 6px;font-size:11px;">${b}</span>`).join("")}</span>
+  `;
+  bar.style.display = "flex";
+}
+
+// ============== 认领/评价/举报交互 ==============
+async function handleClaimRequest(recordId, answer) {
+  if (!currentUser) { showToast("请先登录", "error"); return; }
+  try {
+    const resp = await fetch("/api/records?action=claim-request", {
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ record_id: recordId, answer }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast("认领申请已提交，等待发布者审核", "success");
+      els.detailDialog?.close();
+    } else {
+      showToast(data.error || "提交失败", "error");
+    }
+  } catch (e) { showToast("提交失败", "error"); }
+}
+
+async function handleReport(recordId) {
+  if (!currentUser) { showToast("请先登录", "error"); return; }
+  try {
+    const resp = await fetch("/api/records?action=report", {
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ record_id: recordId, reason: "用户举报" }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast("举报已提交", "success");
+    } else {
+      showToast(data.error || "举报失败", "error");
+    }
+  } catch (e) { showToast("举报失败", "error"); }
+}
+
+function openReviewDialog(recordId) {
+  // 动态创建评价弹窗内容
+  const dialog = document.createElement("dialog");
+  dialog.className = "detail-dialog";
+  dialog.innerHTML = `
+    <div class="detail-content" style="padding:24px;">
+      <h3>评价此次交易</h3>
+      <div class="review-stars" id="reviewStars">
+        <span class="star" data-val="1">⭐</span>
+        <span class="star" data-val="2">⭐</span>
+        <span class="star" data-val="3">⭐</span>
+        <span class="star" data-val="4">⭐</span>
+        <span class="star" data-val="5">⭐</span>
+      </div>
+      <textarea class="review-comment" id="reviewComment" rows="3" placeholder="写下您的评价（选填）"></textarea>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="primary-action" id="submitReviewBtn" type="button">提交评价</button>
+        <button class="ghost-button" id="cancelReviewBtn" type="button">取消</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+
+  let selectedRating = 0;
+  const stars = dialog.querySelectorAll(".star");
+  stars.forEach((star) => {
+    star.addEventListener("click", () => {
+      selectedRating = parseInt(star.dataset.val, 10);
+      stars.forEach((s, i) => s.classList.toggle("is-active", i < selectedRating));
+    });
+  });
+
+  dialog.querySelector("#cancelReviewBtn").addEventListener("click", () => dialog.close());
+  dialog.querySelector("#submitReviewBtn").addEventListener("click", async () => {
+    if (!selectedRating) { showToast("请选择评分", "error"); return; }
+    try {
+      const resp = await fetch("/api/records?action=submit-review", {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ record_id: recordId, rating: selectedRating, comment: dialog.querySelector("#reviewComment").value.trim() }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        showToast("评价已提交", "success");
+        dialog.close();
+      } else {
+        showToast(data.error || "评价失败", "error");
+      }
+    } catch (e) { showToast("评价失败", "error"); }
+  });
+  dialog.addEventListener("close", () => dialog.remove());
+}

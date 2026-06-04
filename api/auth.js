@@ -23,6 +23,33 @@ const USERS_TABLE = "shiyun_users";
 // 内存兜底存储（Supabase 不可用时使用）
 const memoryUsers = new Map();
 
+// 徽章定义
+const BADGE_DEFS = {
+  "newbie": { emoji: "🌱", name: "新手上路", rarity: "common", desc: "加入拾寻" },
+  "verified": { emoji: "✅", name: "实名认证", rarity: "rare", desc: "完成实名认证" },
+  "first_publish": { emoji: "📝", name: "初次发布", rarity: "common", desc: "首次发布信息" },
+  "match_master": { emoji: "🎯", name: "匹配达人", rarity: "rare", desc: "产生一次80%+匹配" },
+  "helper": { emoji: "🤝", name: "助人为乐", rarity: "epic", desc: "帮助找回1件物品" },
+  "streak7": { emoji: "🔥", name: "连续活跃", rarity: "rare", desc: "连续7天登录" },
+  "guardian": { emoji: "🏆", name: "城市守护者", rarity: "legendary", desc: "等级达到7级" },
+};
+
+function calculateLevel(exp) {
+  return Math.max(1, Math.floor(1 + Math.sqrt(exp / 100)));
+}
+
+function getExpForNextLevel(level) {
+  return Math.pow(level, 2) * 100;
+}
+
+function getLevelTitle(level) {
+  if (level <= 2) return "拾遗新手";
+  if (level <= 4) return "热心市民";
+  if (level <= 6) return "城市好心人";
+  if (level <= 8) return "拾金不昧达人";
+  return "城市守护者";
+}
+
 module.exports = async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -32,6 +59,9 @@ module.exports = async function handler(req, res) {
     if (action === "wechat-login") return handleWechatLogin(req, res);
     if (action === "guest-login") return handleGuestLogin(req, res);
     if (action === "verify-identity") return handleVerifyIdentity(req, res);
+    if (action === "add-exp") return handleAddExp(req, res);
+    if (action === "unlock-badge") return handleUnlockBadge(req, res);
+    if (action === "check-streak") return handleCheckStreak(req, res);
 
     sendJson(res, 400, { error: "Unknown action", action });
   } catch (error) {
@@ -100,12 +130,104 @@ async function handleVerifyIdentity(req, res) {
     sendJson(res, 400, { error: "实名信息格式不正确（mock 校验）" });
     return;
   }
+  const user = await fetchUserById(current.sub);
+  const oldBadges = user?.badges || ["🌱 新手上路"];
+  const newBadges = oldBadges.includes("✅ 实名认证") ? oldBadges : [...oldBadges, "✅ 实名认证"];
+  const oldExp = user?.exp || 0;
+  const newExp = oldExp + 50;
+  const newLevel = calculateLevel(newExp);
   const updated = await updateUser(current.sub, {
     is_verified: true,
     real_name_hash: crypto.createHash("sha256").update(realName + idLast4).digest("hex").slice(0, 16),
+    credit_score: 10,
+    badges: newBadges,
+    exp: newExp,
+    level: newLevel,
   });
   const token = signJwt({ sub: updated.id, nickname: updated.nickname, provider: current.provider, verified: true });
-  sendJson(res, 200, { token, user: updated });
+  sendJson(res, 200, { token, user: updated, unlocked: { badge: "verified", expDelta: 50, levelUp: newLevel > (user?.level || 1) } });
+}
+
+async function handleAddExp(req, res) {
+  const current = getCurrentUser(req);
+  if (!current) {
+    sendJson(res, 401, { error: "Not authenticated" });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const delta = parseInt(body.delta || 0, 10);
+  const action = String(body.action || "").trim();
+  if (!delta || delta <= 0) {
+    sendJson(res, 400, { error: "Invalid delta" });
+    return;
+  }
+  const user = await fetchUserById(current.sub);
+  const oldExp = user?.exp || 0;
+  const oldLevel = user?.level || 1;
+  const newExp = oldExp + delta;
+  const newLevel = calculateLevel(newExp);
+  const patch = { exp: newExp, level: newLevel };
+  if (action === "publish") {
+    patch.total_published = (user?.total_published || 0) + 1;
+  }
+  if (action === "help") {
+    patch.total_helped = (user?.total_helped || 0) + 1;
+  }
+  const updated = await updateUser(current.sub, patch);
+  sendJson(res, 200, { user: updated, expDelta: delta, levelUp: newLevel > oldLevel, newLevel });
+}
+
+async function handleUnlockBadge(req, res) {
+  const current = getCurrentUser(req);
+  if (!current) {
+    sendJson(res, 401, { error: "Not authenticated" });
+    return;
+  }
+  const body = await readJsonBody(req);
+  const badgeKey = String(body.badge || "").trim();
+  if (!BADGE_DEFS[badgeKey]) {
+    sendJson(res, 400, { error: "Unknown badge" });
+    return;
+  }
+  const user = await fetchUserById(current.sub);
+  const oldBadges = user?.badges || ["🌱 新手上路"];
+  const badgeEmoji = BADGE_DEFS[badgeKey].emoji;
+  const badgeLabel = `${badgeEmoji} ${BADGE_DEFS[badgeKey].name}`;
+  if (oldBadges.includes(badgeLabel)) {
+    sendJson(res, 200, { alreadyHad: true });
+    return;
+  }
+  const newBadges = [...oldBadges, badgeLabel];
+  const updated = await updateUser(current.sub, { badges: newBadges });
+  sendJson(res, 200, { user: updated, badge: badgeKey, badgeLabel });
+}
+
+async function handleCheckStreak(req, res) {
+  const current = getCurrentUser(req);
+  if (!current) {
+    sendJson(res, 401, { error: "Not authenticated" });
+    return;
+  }
+  const user = await fetchUserById(current.sub);
+  const today = new Date().toISOString().slice(0, 10);
+  const lastDate = user?.last_active_date || "";
+  let streak = user?.streak_days || 0;
+  if (lastDate === today) {
+    sendJson(res, 200, { streak, today: true });
+    return;
+  }
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (lastDate === yesterday) {
+    streak += 1;
+  } else {
+    streak = 1;
+  }
+  const newBadges = user?.badges || ["🌱 新手上路"];
+  if (streak >= 7 && !newBadges.includes("🔥 连续活跃")) {
+    newBadges.push("🔥 连续活跃");
+  }
+  const updated = await updateUser(current.sub, { streak_days: streak, last_active_date: today, badges: newBadges });
+  sendJson(res, 200, { streak, updated, unlockedStreakBadge: streak >= 7 && !user?.badges?.includes("🔥 连续活跃") });
 }
 
 function randomSuffix() {
@@ -168,6 +290,12 @@ async function createUser(fields) {
     real_name_hash: "",
     credit_score: 5,
     badges: ["🌱 新手上路"],
+    level: 1,
+    exp: 0,
+    total_published: 0,
+    total_helped: 0,
+    streak_days: 0,
+    last_active_date: "",
     is_institution: false,
     institution_name: "",
     created_at: now,

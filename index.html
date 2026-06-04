@@ -87,10 +87,11 @@
               <button class="chip is-active" data-filter="all" type="button">全部</button>
               <button class="chip" data-filter="lost" type="button">寻物</button>
               <button class="chip" data-filter="found" type="button">招领</button>
-              <button class="chip" data-filter="hot" type="button">高匹配</button>
               <button class="chip" data-filter="institution" type="button">官方</button>
             </div>
           </div>
+          <!-- 用户状态条 -->
+          <div class="user-status-bar" id="userStatusBar" style="display:none;"></div>
           <div class="search-row">
             <input id="searchInput" type="search" placeholder="搜索物品、地点、颜色或描述" autocomplete="off" />
             <select id="categoryFilter" aria-label="按类别筛选">
@@ -104,6 +105,10 @@
               <option value="贵重物品">贵重物品</option>
               <option value="其他">其他</option>
             </select>
+          </div>
+          <div class="location-filter-row" id="locationFilterRow">
+            <select id="filterDistrict"><option value="all">全部区</option></select>
+            <select id="filterStreet"><option value="all">全部街道</option></select>
           </div>
           <div class="card-grid" id="itemList"></div>
         </section>
@@ -204,10 +209,46 @@
                   <option value="透明">透明</option>
                 </select>
               </label>
+              <div class="location-cascade">
               <label>
-                地点（精确）
-                <input name="location" required placeholder="例如：南京东路地铁站 5 号口" />
+                城市
+                <select name="city" required>
+                  <option value="上海市" selected>上海市</option>
+                </select>
               </label>
+              <label>
+                区/县
+                <select name="district" required id="districtSelect">
+                  <option value="">请选择</option>
+                  <option value="黄浦区">黄浦区</option>
+                  <option value="静安区">静安区</option>
+                  <option value="徐汇区">徐汇区</option>
+                  <option value="长宁区">长宁区</option>
+                  <option value="普陀区">普陀区</option>
+                  <option value="虹口区">虹口区</option>
+                  <option value="杨浦区">杨浦区</option>
+                  <option value="浦东新区">浦东新区</option>
+                  <option value="闵行区">闵行区</option>
+                  <option value="宝山区">宝山区</option>
+                  <option value="嘉定区">嘉定区</option>
+                  <option value="金山区">金山区</option>
+                  <option value="松江区">松江区</option>
+                  <option value="青浦区">青浦区</option>
+                  <option value="奉贤区">奉贤区</option>
+                  <option value="崇明区">崇明区</option>
+                </select>
+              </label>
+              <label>
+                街道/地标
+                <select name="street" required id="streetSelect">
+                  <option value="">请先选择区</option>
+                </select>
+              </label>
+              <label>
+                具体位置（选填）
+                <input name="detail_location" placeholder="例如：地铁站 5 号口" />
+              </label>
+            </div>
               <label>
                 丢失/捡到时间
                 <input name="time" type="datetime-local" required />
@@ -221,6 +262,11 @@
             <label class="wide-label">
               详细描述
               <textarea name="description" rows="3" required placeholder="补充品牌、外观、特殊标记、可能遗失位置等"></textarea>
+            </label>
+            <label class="wide-label">
+              认领验证问题（选填）
+              <input name="claim_question" placeholder="例如：包里除了电脑还有什么？" />
+              <small style="color:var(--text2);font-size:12px;">设置问题后，失主需要回答正确才能申请联系你，防止冒领</small>
             </label>
 
             <!-- 代保管点选择器（item_status=custody 时显示） -->
@@ -337,14 +383,7 @@
         </section>
       </main>
 
-      <!-- ============== 右侧检查面板（桌面） ============== -->
-      <aside class="inspector" aria-label="高匹配提醒">
-        <div class="inspector-card">
-          <h3>高匹配提醒</h3>
-          <div id="topAlerts"></div>
-        </div>
 
-      </aside>
     </div>
 
     <!-- 底部 Tab（移动端） -->
@@ -460,6 +499,9 @@
       </div>
     </dialog>
 
-    <script src="script.js?v=5"></script>
+    <!-- 浮动通知容器 -->
+    <div class="float-notify-host" id="floatNotifyHost"></div>
+
+    <script src="script.js?v=6"></script>
   </body>
 </html>
