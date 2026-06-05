@@ -97,9 +97,10 @@ async function handleWechatLogin(req, res) {
       avatar_url: avatarUrl,
       wechat_openid: openid,
       login_provider: "wechat_mock",
+      role: "user",
     });
   }
-  const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "wechat_mock" });
+  const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "wechat_mock", role: user.role || "user" });
   sendJson(res, 200, { token, user });
 }
 
@@ -111,8 +112,9 @@ async function handleGuestLogin(req, res) {
     avatar_url: "",
     wechat_openid: "",
     login_provider: "guest",
+    role: "user",
   });
-  const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "guest" });
+  const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "guest", role: user.role || "user" });
   sendJson(res, 200, { token, user });
 }
 
@@ -144,7 +146,7 @@ async function handleVerifyIdentity(req, res) {
     exp: newExp,
     level: newLevel,
   });
-  const token = signJwt({ sub: updated.id, nickname: updated.nickname, provider: current.provider, verified: true });
+  const token = signJwt({ sub: updated.id, nickname: updated.nickname, provider: current.provider, verified: true, role: updated.role || "user" });
   sendJson(res, 200, { token, user: updated, unlocked: { badge: "verified", expDelta: 50, levelUp: newLevel > (user?.level || 1) } });
 }
 
@@ -298,6 +300,7 @@ async function createUser(fields) {
     last_active_date: "",
     is_institution: false,
     institution_name: "",
+    role: fields.role || "user",
     created_at: now,
   };
   const config = getSupabaseConfig();

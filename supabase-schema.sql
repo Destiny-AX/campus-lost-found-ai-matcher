@@ -152,3 +152,6 @@ create table if not exists public.shiyun_claim_requests (
 
 create index if not exists shiyun_claim_requests_record_idx on public.shiyun_claim_requests (record_id);
 create index if not exists shiyun_claim_requests_claimant_idx on public.shiyun_claim_requests (claimant_id);
+
+-- ============== v4 升级：用户角色字段 ==============
+alter table public.shiyun_users add column if not exists role text default 'user' check (role in ('user', 'admin'));

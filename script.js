@@ -73,6 +73,7 @@ const ITEM_STATUS_LABELS = {
 };
 
 const AUTH_TOKEN_KEY = "shiyun_auth_token";
+const ACCOUNTS_KEY = "shiyun_accounts"; // 存储所有登录过的账号列表
 const NOTIFY_POLL_INTERVAL = 8000;
 
 // atob() 将 Base64 解码为 Latin-1，中文 UTF-8 多字节会乱码
@@ -311,6 +312,7 @@ function openUserDialog() {
     `;
   }
 
+  renderAccountList();
   document.querySelector("#userDialog").showModal();
 }
 
@@ -332,6 +334,7 @@ async function handleWechatLogin(event) {
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
     currentUser = decodeJwtPayload(payload.token);
+    addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
     showToast(`欢迎，${currentUser.nickname}！`, "success");
@@ -348,6 +351,7 @@ async function handleGuestLogin() {
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
     currentUser = decodeJwtPayload(payload.token);
+    addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
     showToast(`游客 ${currentUser.nickname}，欢迎体验！`, "success");
@@ -368,6 +372,7 @@ async function handleVerifyIdentity(event) {
     if (!response.ok) { showToast(payload.error || "认证失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
     currentUser = decodeJwtPayload(payload.token);
+    addAccount(payload.token, payload.user);
     updateAuthUI();
     els.verifyDialog.close();
     showToast("实名认证成功！现在可以查看完整信息。", "success");
@@ -550,6 +555,7 @@ function renderRecordCard(record) {
   const custodyBadge = record.item_status === "custody" ? `<span class="meta-pill custody-pill">🤝 代保管</span>` : "";
   const fuzzyBadge = fuzzy ? `<span class="meta-pill fuzzy-pill">🔒 模糊化</span>` : "";
   const ownActions = isOwn ? `<button class="ghost-button" data-edit-id="${record.id}" type="button">编辑</button><button class="danger-button" data-delete-id="${record.id}" type="button">删除</button>` : "";
+  const adminActions = isAdmin() && !isOwn ? `<button class="danger-button" data-admin-delete-id="${record.id}" type="button">管理员删除</button>` : "";
   const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
   const imgSrc = record.imageData || createSyntheticImage(record.visualSeed || defaultSeed, record.title);
   // 优先使用结构化地点展示
@@ -579,7 +585,7 @@ function renderRecordCard(record) {
           <button class="ghost-button" data-detail-id="${record.id}" type="button">详情</button>
           <button class="ghost-button" data-match-id="${record.id}" type="button">匹配</button>
           ${record.item_status === "custody" && record.type === "found" ? `<button class="ghost-button pickup-btn" data-pickup-id="${record.id}" type="button">取件</button>` : ""}
-          ${ownActions}
+          ${ownActions}${adminActions}
         </div>
       </div>
     </article>`;
@@ -600,6 +606,11 @@ function bindCardActions(container = els.itemList) {
   });
   container.querySelectorAll("[data-pickup-id]").forEach((btn) => {
     btn.addEventListener("click", () => { els.pickupForm.querySelector('input[name="record_id"]')?.remove(); const hidden = document.createElement("input"); hidden.type = "hidden"; hidden.name = "record_id"; hidden.value = btn.dataset.pickupId; els.pickupForm.appendChild(hidden); els.pickupDialog.showModal(); });
+  });
+  container.querySelectorAll("[data-admin-delete-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (confirm("管理员确认删除此记录？")) deleteRecord(btn.dataset.adminDeleteId);
+    });
   });
 }
 
@@ -795,6 +806,7 @@ function openDetail(id) {
   const fuzzy = record.is_fuzzy;
   const statusLabel = ITEM_STATUS_LABELS[record.item_status] || "";
   const ownActions = isOwn ? `<button class="danger-button" data-delete-id="${record.id}" type="button">删除这条发布</button>` : "";
+  const adminActionsDetail = isAdmin() && !isOwn ? `<button class="danger-button" data-admin-delete-id="${record.id}" type="button">管理员删除</button>` : "";
 
   const verifyPrompt = fuzzy
     ? `<div class="fuzzy-notice">🔒 部分信息已模糊化处理，<button class="text-button verify-trigger" type="button">完成实名认证</button>后可查看完整信息。</div>`
@@ -867,7 +879,7 @@ function openDetail(id) {
           ${contactDisplay}
         </div>
         ${custodyInfo}${institutionInfo}${pickupInfo}
-        ${ownActions ? `<div class="card-actions">${ownActions}</div>` : ""}
+        ${ownActions || adminActionsDetail ? `<div class="card-actions">${ownActions}${adminActionsDetail}</div>` : ""}
         ${reviewSection}
         <div style="text-align:right;margin-top:8px;">${reportLink}</div>
         ${renderSemanticBlock(record.semantic)}
@@ -881,6 +893,11 @@ function openDetail(id) {
 
   els.detailContent.querySelectorAll("[data-delete-id]").forEach((btn) => {
     btn.addEventListener("click", () => deleteRecord(btn.dataset.deleteId));
+  });
+  els.detailContent.querySelectorAll("[data-admin-delete-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (confirm("管理员确认删除此记录？")) deleteRecord(btn.dataset.adminDeleteId);
+    });
   });
   els.detailContent.querySelectorAll(".verify-trigger").forEach((btn) => {
     btn.addEventListener("click", () => { els.detailDialog.close(); els.verifyDialog.showModal(); });
@@ -1134,9 +1151,72 @@ function handleLogout() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   currentUser = null;
   updateAuthUI();
-  showToast("已退出登录", "info");
-  setTimeout(() => window.location.reload(), 300);
+  renderAll();
+  showToast("已退出当前账号", "info");
 }
+
+// ============== 多账号管理 ==============
+function getAccounts() {
+  try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "[]"); } catch { return []; }
+}
+function saveAccounts(list) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list)); }
+
+function addAccount(token, user) {
+  const list = getAccounts().filter(a => a.id !== user.sub);
+  list.unshift({ id: user.sub, nickname: user.nickname, token, avatar: user.avatar_url || "" });
+  saveAccounts(list);
+}
+
+function switchAccount(accountId) {
+  const acc = getAccounts().find(a => a.id === accountId);
+  if (!acc) return false;
+  localStorage.setItem(AUTH_TOKEN_KEY, acc.token);
+  currentUser = decodeJwtPayload(acc.token);
+  updateAuthUI();
+  renderAll();
+  showToast(`已切换到 ${acc.nickname}`, "success");
+  return true;
+}
+
+function removeAccount(accountId) {
+  const list = getAccounts().filter(a => a.id !== accountId);
+  saveAccounts(list);
+  if (currentUser && currentUser.sub === accountId) {
+    handleLogout();
+  }
+}
+
+function renderAccountList() {
+  const container = document.getElementById("accountList");
+  if (!container) return;
+  const accounts = getAccounts();
+  const currentId = currentUser?.sub;
+  container.innerHTML = accounts.map(a => `
+    <div class="account-item ${a.id === currentId ? 'is-current' : ''}" data-account-id="${escapeHtml(a.id)}">
+      <span class="acc-avatar">${a.avatar ? `<img src="${escapeHtml(a.avatar)}" style="width:100%;height:100%;border-radius:50%">` : '👤'}</span>
+      <span class="acc-name">${escapeHtml(a.nickname)} ${a.id === currentId ? '<span style="color:var(--primary);font-size:12px">当前</span>' : ''}</span>
+      <span class="acc-remove" data-remove-id="${escapeHtml(a.id)}">移除</span>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".account-item").forEach(el => {
+    el.addEventListener("click", (e) => {
+      if (e.target.classList.contains("acc-remove")) {
+        const id = e.target.dataset.removeId;
+        removeAccount(id);
+        renderAccountList();
+        return;
+      }
+      const id = el.dataset.accountId;
+      if (id !== currentId) {
+        switchAccount(id);
+        renderAccountList();
+      }
+    });
+  });
+}
+
+function isAdmin() { return currentUser?.role === "admin"; }
 
 // ============== 图片上传 ==============
 async function handleImageUpload(event) {

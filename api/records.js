@@ -210,7 +210,7 @@ async function handleUpdate(req, res) {
   if (!config) {
     const row = memoryRecords.get(id);
     if (!row) { sendJson(res, 404, { error: "记录不存在" }); return; }
-    if (row.owner_id && row.owner_id !== current.sub) { sendJson(res, 403, { error: "只能更新自己发布的记录" }); return; }
+    if (row.owner_id && row.owner_id !== current.sub && current.role !== "admin") { sendJson(res, 403, { error: "只能更新自己发布的记录" }); return; }
     Object.assign(row, patch);
     memoryRecords.set(id, row);
     sendJson(res, 200, { ok: true, record: fromMemoryRow(row, current) });
@@ -225,7 +225,7 @@ async function handleUpdate(req, res) {
     if (checkResponse.ok) {
       const rows = await checkResponse.json();
       const owner = rows[0]?.owner_id;
-      if (owner && owner !== current.sub) {
+      if (owner && owner !== current.sub && current.role !== "admin") {
         sendJson(res, 403, { error: "只能更新自己发布的记录" });
         return;
       }
