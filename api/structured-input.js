@@ -20,6 +20,26 @@ const CATEGORIES = ["证件", "电子设备", "生活用品", "学习用品", "�
 const COLORS = ["黑色", "白色", "蓝色", "红色", "黄色", "绿色", "银色", "灰色", "粉色", "透明"];
 const ITEM_STATUS = ["in_place", "custody", "picked", "institution", "unknown"];
 
+// 区→街道映射（与前端保持一致，用于地点结构化提取）
+const STREET_DATA = {
+  "黄浦区": ["南京东路", "外滩", "人民广场", "淮海中路", "豫园", "新天地", "老西门"],
+  "静安区": ["静安寺", "南京西路", "曹家渡", "石门二路", "江宁路", "北站", "芷江西路"],
+  "徐汇区": ["徐家汇", "衡山路", "漕河泾", "龙华", "长桥", "康健新村", "田林"],
+  "长宁区": ["中山公园", "虹桥", "新华路", "江苏路", "周家桥", "天山路", "仙霞新村"],
+  "普陀区": ["长寿路", "曹杨新村", "长风新村", "宜川路", "甘泉路", "石泉路", "真如"],
+  "虹口区": ["四川北路", "北外滩", "欧阳路", "广中路", "凉城新村", "江湾镇"],
+  "杨浦区": ["五角场", "控江路", "平凉路", "江浦路", "四平路", "长白新村", "殷行"],
+  "浦东新区": ["陆家嘴", "张江", "世纪大道", "金桥", "花木", "洋泾", "周浦", "康桥", "唐镇"],
+  "闵行区": ["莘庄", "七宝", "虹桥镇", "梅陇", "颛桥", "马桥", "吴泾", "浦江"],
+  "宝山区": ["淞宝", "大场", "杨行", "月浦", "罗店", "顾村", "高境", "庙行"],
+  "嘉定区": ["嘉定镇", "南翔", "安亭", "马陆", "江桥", "徐行", "外冈", "菊园新区"],
+  "金山区": ["石化", "朱泾", "枫泾", "亭林", "漕泾", "山阳", "金山卫", "张堰"],
+  "松江区": ["松江新城", "九亭", "泗泾", "佘山", "洞泾", "新桥", "车墩", "叶榭"],
+  "青浦区": ["青浦镇", "徐泾", "华新", "重固", "白鹤", "朱家角", "练塘", "金泽"],
+  "奉贤区": ["南桥", "奉浦", "庄行", "金汇", "青村", "柘林", "四团", "海湾"],
+  "崇明区": ["城桥", "堡镇", "新河", "庙镇", "竖新", "向化", "三星", "港西"],
+};
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Method not allowed" });
@@ -125,10 +145,21 @@ function buildPrompt(text) {
     `- 必须是以下之一：${COLORS.join("、")}`,
     "- 如果有多个颜色，只取物品主体颜色",
     "",
-    "### 5. location",
+    "### 5. location（纯文本，用于展示）",
     "- 精确提取地点，保留\"地铁站\"\"图书馆\"等关键地标",
     "- 去除动作词：\"在\"\"丢在\"\"捡到\"等",
     '- 错误示例："在传媒大学图书馆" → 正确："传媒大学图书馆"',
+    "",
+    "### 5a. district（区/县）",
+    `- 必须是以下之一：${Object.keys(STREET_DATA).join("、")}`,
+    "- 从地点中识别所属区",
+    "",
+    "### 5b. street（街道/地标）",
+    "- 从地点中识别具体街道、商圈或地标名称",
+    "- 例如：南京东路、人民广场、徐家汇",
+    "",
+    "### 5c. detail_location（具体位置，选填）",
+    "- 更精确的位置描述，如'地铁站5号口'、'图书馆三楼'",
     "",
     "### 6. time",
     "- 解析相对时间并转换为 ISO 8601 格式（YYYY-MM-DDTHH:mm）",
@@ -153,11 +184,11 @@ function buildPrompt(text) {
     "",
     "输入：\"昨天下午在人民广场地铁站捡到一个黑色一加耳机，已交给服务台，电话 021-12345678\"",
     "输出：",
-    '{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"人民广场地铁站","time":"2026-06-03T15:00","contact":"人民广场地铁站服务台 021-12345678","description":"在人民广场地铁站捡到黑色一加耳机，已交给服务台","item_status":"institution","confidence":0.95}',
+    '{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"人民广场地铁站","district":"黄浦区","street":"人民广场","detail_location":"地铁站","time":"2026-06-03T15:00","contact":"人民广场地铁站服务台 021-12345678","description":"在人民广场地铁站捡到黑色一加耳机，已交给服务台","item_status":"institution","confidence":0.95}',
     "",
     "输入：\"我的蓝色校园卡套丢了，里面有校园卡和门禁卡，可能在图书馆\"",
     "输出：",
-    '{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆","time":"2026-06-04T10:00","contact":"","description":"蓝色校园卡套丢失，内有校园卡和门禁卡，最后出现在图书馆","item_status":"unknown","confidence":0.92}',
+    '{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆","district":"","street":"","detail_location":"","time":"2026-06-04T10:00","contact":"","description":"蓝色校园卡套丢失，内有校园卡和门禁卡，最后出现在图书馆","item_status":"unknown","confidence":0.92}',
     "",
     `当前时间：${new Date().toISOString()}`,
     "",
@@ -193,12 +224,20 @@ function normalizeStructured(value, originalText) {
   // 二次清理 title：确保没有颜色词、动作词残留
   let title = cleanTitle(String(data.title || "").slice(0, 60));
 
+  // 地点结构化
+  const district = pickEnum(data.district, Object.keys(STREET_DATA), "");
+  const street = String(data.street || "").slice(0, 40);
+  const detailLocation = String(data.detail_location || "").slice(0, 60);
+
   return {
     type,
     title,
     category: pickEnum(data.category, CATEGORIES, "其他"),
     color: pickEnum(data.color, COLORS, "黑色"),
     location: String(data.location || "未知地点").slice(0, 60),
+    district,
+    street,
+    detail_location: detailLocation,
     time: normalizeTime(data.time),
     contact,
     description: String(data.description || originalText).slice(0, 600),
@@ -315,6 +354,23 @@ function heuristicExtract(text) {
   }
   location = location.replace(/^(?:的|是|有|个|一|了|和|在|捡到|拾到|捡了|拾了|发现|看到一个|丢了|掉了|不见|找到)\s*/, "").trim();
   if (!location) location = "未知地点";
+
+  // 结构化地点解析
+  let district = "";
+  let street = "";
+  let detailLocation = "";
+  const districtMatch = location.match(/(黄浦区|静安区|徐汇区|长宁区|普陀区|虹口区|杨浦区|浦东新区|闵行区|宝山区|嘉定区|金山区|松江区|青浦区|奉贤区|崇明区)/);
+  if (districtMatch) {
+    district = districtMatch[1];
+    const possibleStreets = STREET_DATA[district] || [];
+    for (const s of possibleStreets) {
+      if (location.includes(s)) {
+        street = s;
+        break;
+      }
+    }
+  }
+  detailLocation = location.replace(district, "").replace(street, "").replace(/^[\s·-]+/, "").slice(0, 60);
 
   // 时间：默认当前
   const now = new Date();
@@ -434,6 +490,9 @@ function heuristicExtract(text) {
     category,
     color,
     location,
+    district,
+    street,
+    detail_location: detailLocation,
     time: now.toISOString().slice(0, 16),
     contact,
     description: text.slice(0, 600),

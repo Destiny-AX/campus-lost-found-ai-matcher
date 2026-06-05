@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startNotifyPoll();
   checkHighMatchAlerts();
   checkUserStreak();
+  initMascot();
 
   // 检查使用说明提示条是否已关闭
   const infoBanner = document.querySelector('#infoBanner');
@@ -420,6 +421,23 @@ function fillFormFields(s) {
   if (colorSelect && s.color) setSelectValue(colorSelect, s.color);
   const locationInput = form.querySelector('input[name="location"]');
   if (locationInput && s.location) locationInput.value = s.location;
+
+  // 结构化地点自动填充级联选择器
+  const districtSelect = form.querySelector('select[name="district"]');
+  const streetSelect = form.querySelector('select[name="street"]');
+  const detailInput = form.querySelector('input[name="detail_location"]');
+  if (districtSelect && s.district) {
+    setSelectValue(districtSelect, s.district);
+    const event = new Event("change");
+    districtSelect.dispatchEvent(event);
+  }
+  if (streetSelect && s.street) {
+    setTimeout(() => { setSelectValue(streetSelect, s.street); }, 50);
+  }
+  if (detailInput && s.detail_location) {
+    detailInput.value = s.detail_location;
+  }
+
   const timeInput = form.querySelector('input[name="time"]');
   if (timeInput && s.time) timeInput.value = s.time;
   const descTextarea = form.querySelector('textarea[name="description"]');
@@ -534,6 +552,10 @@ function renderRecordCard(record) {
   const ownActions = isOwn ? `<button class="ghost-button" data-edit-id="${record.id}" type="button">编辑</button><button class="danger-button" data-delete-id="${record.id}" type="button">删除</button>` : "";
   const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
   const imgSrc = record.imageData || createSyntheticImage(record.visualSeed || defaultSeed, record.title);
+  // 优先使用结构化地点展示
+  const locationDisplay = record.district && record.street
+    ? `${escapeHtml(record.district)} · ${escapeHtml(record.street)}`
+    : escapeHtml(record.location);
   return `
     <article class="card${fuzzy ? " is-fuzzy" : ""}">
       <span class="thumb">
@@ -548,7 +570,7 @@ function renderRecordCard(record) {
         <div class="meta-line">
           <span class="meta-pill">${escapeHtml(record.category)}</span>
           <span class="meta-pill">${escapeHtml(record.color)}</span>
-          <span class="meta-pill">${escapeHtml(record.location)}</span>
+          <span class="meta-pill">${locationDisplay}</span>
           ${institutionBadge}${custodyBadge}${fuzzyBadge}
         </div>
         <p>${escapeHtml(record.description)}</p>
@@ -1764,7 +1786,8 @@ function showAchievementPopup(type, message, badgeEmoji = "") {
 }
 
 function shareAchievement(type, message) {
-  const text = `我在 #拾寻 城市失物招领平台达成了成就：${message}！\n帮助失物回到主人身边，让城市更温暖。\n快来一起参与吧 👇\n${window.location.href}`;
+  const badgeEmoji = type === "badge" ? "🏆" : type === "level_up" ? "🎉" : "✨";
+  const text = `${badgeEmoji} 我在【拾寻】城市失物招领平台达成了成就：${message}！\n\n💙 每一份善意都让城市更温暖\n🤝 快来一起帮助失物回到主人身边\n👇 ${window.location.href}`;
   if (navigator.share) {
     navigator.share({ title: "拾寻成就", text }).catch(() => {
       copyToClipboard(text);
@@ -1924,3 +1947,128 @@ function openReviewDialog(recordId) {
   });
   dialog.addEventListener("close", () => dialog.remove());
 }
+
+// ============== 互动角色：拾小寻 ==============
+const MASCOT_TIPS = {
+  home: [
+    "👋 你好！我是拾小寻，有什么可以帮你的吗？",
+    "💡 小提示：发布信息时尽量描述详细，匹配更准确哦！",
+    "🔍 在搜索框输入关键词，可以快速找到相关失物~",
+  ],
+  publish: [
+    "📝 填写详细信息能帮助失主更快找回物品！",
+    "📸 上传图片可以让匹配更准确哦~",
+    "🗺️ 地点选到街道级别，附近的人更容易看到！",
+  ],
+  match: [
+    "🤖 AI 会综合颜色、地点、时间等多个维度为你匹配！",
+    "📷 上传图片进行以图搜图，找东西更高效~",
+  ],
+  notify: [
+    "🔔 有新消息会在这里通知你哦~",
+    "📬 记得及时查看认领申请！",
+  ],
+  profile: [
+    "🏅 多发布、多帮助，就能升级解锁更多徽章！",
+    "✨ 连续登录可以获得🔥连续活跃徽章哦~",
+  ],
+  stats: [
+    "📊 数据见证温暖，每一份善意都被记录~",
+  ],
+  unverified: [
+    "🔒 实名认证后可以查看完整联系方式哦~",
+    "🆔 点击右上角【实名认证】完成身份验证吧！",
+  ],
+  guest: [
+    "👤 登录后可以发布信息和查看联系方式~",
+    "🚀 快来登录体验完整功能吧！",
+  ],
+};
+
+let mascotTimer = null;
+let mascotTipIndex = 0;
+
+function initMascot() {
+  const avatar = document.getElementById("mascotAvatar");
+  const bubble = document.getElementById("mascotBubble");
+  if (!avatar || !bubble) return;
+
+  // 点击头像切换气泡显示/隐藏
+  avatar.addEventListener("click", () => {
+    const isVisible = bubble.classList.contains("is-visible");
+    if (isVisible) {
+      bubble.classList.remove("is-visible");
+      clearInterval(mascotTimer);
+      mascotTimer = null;
+    } else {
+      refreshMascotTip();
+      bubble.classList.add("is-visible");
+      startMascotRotation();
+    }
+  });
+
+  // 点击气泡外部自动关闭
+  document.addEventListener("click", (e) => {
+    if (!bubble.classList.contains("is-visible")) return;
+    if (!avatar.contains(e.target) && !bubble.contains(e.target)) {
+      bubble.classList.remove("is-visible");
+      clearInterval(mascotTimer);
+      mascotTimer = null;
+    }
+  });
+
+  // 初始延迟显示欢迎语
+  setTimeout(() => {
+    if (!currentUser) {
+      showMascotTip(MASCOT_TIPS.guest[0]);
+    } else if (!currentUser.verified) {
+      showMascotTip(MASCOT_TIPS.unverified[0]);
+    } else {
+      showMascotTip(MASCOT_TIPS.home[0]);
+    }
+    bubble.classList.add("is-visible");
+    startMascotRotation();
+  }, 2500);
+}
+
+function showMascotTip(text) {
+  const bubble = document.getElementById("mascotBubble");
+  if (!bubble) return;
+  bubble.textContent = text;
+}
+
+function refreshMascotTip() {
+  const view = document.querySelector(".view.is-active")?.id?.replace("view-", "") || "home";
+  let pool = MASCOT_TIPS[view] || MASCOT_TIPS.home;
+  if (!currentUser) {
+    pool = pool.concat(MASCOT_TIPS.guest);
+  } else if (!currentUser.verified) {
+    pool = pool.concat(MASCOT_TIPS.unverified);
+  }
+  const idx = Math.floor(Math.random() * pool.length);
+  showMascotTip(pool[idx]);
+}
+
+function startMascotRotation() {
+  if (mascotTimer) clearInterval(mascotTimer);
+  mascotTimer = setInterval(() => {
+    refreshMascotTip();
+  }, 6000);
+}
+
+function stopMascotRotation() {
+  if (mascotTimer) {
+    clearInterval(mascotTimer);
+    mascotTimer = null;
+  }
+}
+
+// 视图切换时更新拾小寻提示
+const originalSwitchView = switchView;
+switchView = function(view) {
+  originalSwitchView(view);
+  const bubble = document.getElementById("mascotBubble");
+  if (bubble && bubble.classList.contains("is-visible")) {
+    refreshMascotTip();
+  }
+};

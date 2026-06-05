@@ -195,6 +195,11 @@ async function handleUpdate(req, res) {
   if (body.image_data !== undefined) patch.image_data = String(body.image_data);
   if (body.image_feature !== undefined) patch.image_feature = body.image_feature;
   if (body.semantic !== undefined) patch.semantic = body.semantic;
+  if (body.city !== undefined) patch.city = String(body.city).slice(0, 20);
+  if (body.district !== undefined) patch.district = String(body.district).slice(0, 20);
+  if (body.street !== undefined) patch.street = String(body.street).slice(0, 40);
+  if (body.detail_location !== undefined) patch.detail_location = String(body.detail_location).slice(0, 60);
+  if (body.claim_question !== undefined) patch.claim_question = String(body.claim_question).slice(0, 200);
 
   if (!Object.keys(patch).length) {
     sendJson(res, 400, { error: "No fields to update" });
@@ -265,6 +270,11 @@ function normalizeRecord(record, currentUser) {
     imageFeature: record.imageFeature || null,
     semantic: record.semantic || null,
     createdAt: String(record.createdAt || now),
+    city: String(record.city || "上海市").slice(0, 20),
+    district: String(record.district || "").slice(0, 20),
+    street: String(record.street || "").slice(0, 40),
+    detail_location: String(record.detail_location || "").slice(0, 60),
+    claim_question: String(record.claim_question || "").slice(0, 200),
   };
 }
 
@@ -288,6 +298,11 @@ function toSupabaseRow(record) {
     image_feature: record.imageFeature,
     semantic: record.semantic,
     created_at: record.createdAt,
+    city: record.city,
+    district: record.district,
+    street: record.street,
+    detail_location: record.detail_location,
+    claim_question: record.claim_question,
   };
 }
 
@@ -318,6 +333,11 @@ function fromSupabaseRow(row, currentUser) {
     semantic: row.semantic || null,
     createdAt: row.created_at,
     is_fuzzy: shouldFuzzify,
+    city: row.city || "上海市",
+    district: row.district || "",
+    street: row.street || "",
+    detail_location: row.detail_location || "",
+    claim_question: row.claim_question || "",
   };
   return record;
 }
