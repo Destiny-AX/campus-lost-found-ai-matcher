@@ -1214,6 +1214,15 @@ function renderAccountList() {
       }
     });
   });
+
+  // 绑定"添加新账号"按钮
+  const addBtn = document.getElementById("addAccountBtn");
+  if (addBtn) {
+    addBtn.onclick = () => {
+      document.querySelector("#userDialog")?.close();
+      els.loginDialog?.showModal();
+    };
+  }
 }
 
 function isAdmin() { return currentUser?.role === "admin"; }
@@ -1421,6 +1430,21 @@ function openEditForm(recordId) {
   form.querySelector('input[name="contact"]').value = record.contact || "";
   form.querySelector('textarea[name="description"]').value = record.description || "";
 
+  // 填充结构化地点字段
+  const districtSelect = form.querySelector('select[name="district"]');
+  const streetSelect = form.querySelector('select[name="street"]');
+  const detailInput = form.querySelector('input[name="detail_location"]');
+  if (districtSelect && record.district) {
+    setSelectValue(districtSelect, record.district);
+    districtSelect.dispatchEvent(new Event("change"));
+  }
+  if (streetSelect && record.street) {
+    setTimeout(() => { setSelectValue(streetSelect, record.street); }, 50);
+  }
+  if (detailInput) {
+    detailInput.value = record.detail_location || "";
+  }
+
   // 设置图片预览
   if (record.imageData) {
     uploadedImageData = record.imageData;
@@ -1468,18 +1492,23 @@ async function handleUpdateRecord(data) {
     const imageFeature = uploadedFeature || record.imageFeature || null;
     const semantic = uploadedSemantic || record.semantic || buildFallbackSemantic(data);
 
+    const locationParts = [data.district, data.street, data.detail_location].filter(Boolean);
     const updatePayload = {
       id: editingRecordId,
       title: data.title.trim(),
       category: data.category,
       color: data.color,
-      location: data.location,
+      location: locationParts.join(" ") || data.district || data.location,
       time: data.time,
       contact: data.contact.trim(),
       description: data.description.trim(),
       image_data: imageData,
       image_feature: imageFeature,
       semantic: semantic,
+      city: data.city || "上海市",
+      district: data.district || "",
+      street: data.street || "",
+      detail_location: data.detail_location || "",
     };
 
     const response = await fetch("/api/records", {
