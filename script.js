@@ -1543,10 +1543,8 @@ function resetPublishForm() {
 async function deleteRecord(id) {
   const record = records.find((item) => item.id === id);
   if (!record) return;
-  if (currentUser && record.owner_id && record.owner_id !== currentUser.sub) {
-    showToast("只能删除自己发布的记录", "error"); return;
-  }
-  if (!isOwnRecord(record) && !currentUser) return;
+  // 前端已按权限条件渲染按钮，此处仅做兜底校验
+  if (!isOwnRecord(record) && !isAdmin()) return;
   if (!confirm("确定删除这条发布记录吗？")) return;
   try {
     await fetch("/api/records", {
