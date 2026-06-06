@@ -60,7 +60,10 @@ server.listen(PORT, () => {
 function serveStatic(pathname, res, headOnly) {
   const normalized = pathname === "/" ? "/index.html" : pathname;
   const filePath = path.normalize(path.join(ROOT, normalized));
-  if (!filePath.startsWith(ROOT)) {
+  // 统一大小写并确保路径分隔符一致，防止 Windows 路径遍历绕过
+  const rootResolved = path.resolve(ROOT).toLowerCase().replace(/\\/g, "/");
+  const fileResolved = path.resolve(filePath).toLowerCase().replace(/\\/g, "/");
+  if (!fileResolved.startsWith(rootResolved)) {
     sendJson(res, 403, { error: "Forbidden" });
     return;
   }

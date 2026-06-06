@@ -10,9 +10,11 @@ function readEnv(name) {
   if (process.env[name]) return process.env[name];
   if (process.platform !== "win32") return "";
   try {
+    // 对环境变量名做转义，防止单引号注入
+    const safeName = name.replace(/'/g, "''");
     return execFileSync(
       "powershell.exe",
-      ["-NoProfile", "-Command", `[Environment]::GetEnvironmentVariable('${name}','User')`],
+      ["-NoProfile", "-Command", `[Environment]::GetEnvironmentVariable('${safeName}','User')`],
       { encoding: "utf8", windowsHide: true, timeout: 3000 },
     ).trim();
   } catch (error) {

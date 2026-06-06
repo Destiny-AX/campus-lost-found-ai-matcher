@@ -1253,12 +1253,16 @@ function renderUploadMessage(message) {
 }
 
 function renderFeaturePreview(feature, semantic, statusText = "") {
-  const colors = feature.palette.slice(0, 5).map((rgb) => `<span class="swatch" style="background:rgb(${rgb.join(",")})"></span>`).join("");
+  if (!feature) {
+    els.featurePreview.innerHTML = `<strong>图像特征提取失败</strong><p>${escapeHtml(statusText || "无法解析图像特征，请尝试更换图片。")}</p>`;
+    return;
+  }
+  const colors = (feature.palette || []).slice(0, 5).map((rgb) => `<span class="swatch" style="background:rgb(${rgb.join(",")})"></span>`).join("");
   const semanticHtml = semantic
-    ? `<p>语义结果：${escapeHtml(semantic.object_name)} · ${escapeHtml(semantic.category)} · 置信度 ${Math.round(semantic.confidence * 100)}%<br/>特征：${escapeHtml(semantic.features.slice(0, 4).join("、") || "暂无")}</p>`
+    ? `<p>语义结果：${escapeHtml(semantic.object_name)} · ${escapeHtml(semantic.category)} · 置信度 ${Math.round((semantic.confidence || 0) * 100)}%<br/>特征：${escapeHtml((semantic.features || []).slice(0, 4).join("、") || "暂无")}</p>`
     : `<p>${escapeHtml(statusText || "未获得语义识别结果，将使用本地图像特征匹配。")}</p>`;
   els.featurePreview.innerHTML = `<strong>图像特征已提取</strong>
-    <p>主色 RGB：${feature.dominantColor.join(", ")}<br/>感知哈希：${feature.hash.slice(0, 16)}...</p>
+    <p>主色 RGB：${(feature.dominantColor || []).join(", ")}<br/>感知哈希：${(feature.hash || "").slice(0, 16)}...</p>
     <div class="swatch-row">${colors}</div>${semanticHtml}`;
 }
 

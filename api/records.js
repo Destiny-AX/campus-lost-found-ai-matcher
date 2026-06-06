@@ -535,7 +535,7 @@ async function handleSubmitReview(req, res) {
       body: JSON.stringify({ id: reviewId, record_id: recordId, from_user_id: current.sub, to_user_id: toUserId, rating, comment }),
     });
 
-    // 更新信用分和经验
+    // 更新信用分和经验（增量更新）
     if (rating >= 5) {
       await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}`, {
         method: "PATCH", body: JSON.stringify({ credit_score: 10, exp: 30 }),
