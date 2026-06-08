@@ -753,6 +753,14 @@ function initSeedRecords() {
   }
 }
 
+// Debug用：强制重置内存为纯净种子数据（解决历史残留乱码问题）
+function resetSeedRecords() {
+  memoryRecords.clear();
+  SEED_RECORDS.forEach((record) => {
+    memoryRecords.set(record.id, record);
+  });
+}
+
 const handler = async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -779,6 +787,7 @@ async function handleList(req, res) {
   const config = getSupabaseConfig();
 
   // 初始化示例种子数据（仅当内存为空时）
+  // 使用resetSeedRecords()可强制清除历史残留数据，确保只显示纯净示例
   initSeedRecords();
 
   // 始终合并内存中的记录，确保 fallback 写入的记录也能被读到
