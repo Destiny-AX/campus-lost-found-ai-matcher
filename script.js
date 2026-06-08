@@ -545,6 +545,8 @@ function renderItemList() {
     ? list.map((r) => renderRecordCard(r)).join("")
     : `<div class="empty-state">没有找到符合条件的信息。</div>`;
   bindCardActions();
+  // 筛选后更新统计面板（基于当前可见记录）
+  updateHomeStatsFromList(list);
 }
 
 function renderRecordCard(record) {
@@ -703,18 +705,23 @@ function renderStats() {
   updateHomeStats();
 }
 
-// 更新主界面成就统计面板
+// 更新主界面成就统计面板（基于全部记录）
 function updateHomeStats() {
+  updateHomeStatsFromList(records);
+}
+
+// 基于指定记录列表更新统计面板
+function updateHomeStatsFromList(list) {
   // 已找回：状态为"已找回"或"已认领"的记录数
-  const recovered = records.filter((r) => r.status === "已找回" || r.status === "已认领").length;
+  const recovered = list.filter((r) => r.status === "已找回" || r.status === "已认领").length;
   // 帮他人找回：当前用户是招领发布者且已被认领的记录
   const currentId = currentUser?.sub;
   const helpedOthers = currentId
-    ? records.filter((r) => r.type === "found" && r.owner_id === currentId && r.status === "已认领").length
-    : Math.floor(recovered * 0.6); // 未登录时显示模拟数据（60%的找回是他人帮助）
+    ? list.filter((r) => r.type === "found" && r.owner_id === currentId && r.status === "已认领").length
+    : Math.floor(recovered * 0.6); // 未登录时显示模拟数据
   // 进行中：待找回 + 待认领
-  const active = records.filter((r) => r.status === "待找回" || r.status === "待认领").length;
-  // 信用分
+  const active = list.filter((r) => r.status === "待找回" || r.status === "待认领").length;
+  // 信用分（不随筛选变化）
   const credit = currentUser ? (currentUser.credit_score || 100) : 100;
 
   animateNumber("statTotalRecovered", recovered);
