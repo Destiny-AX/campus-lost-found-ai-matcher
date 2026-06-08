@@ -1654,8 +1654,14 @@ function fillDefaultTime() {
 }
 
 function formatTime(value) {
-  try { const d = new Date(value); return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
-  catch (e) { return String(value); }
+  // 防御无效日期值
+  if (!value || value === "未知时间") return "未知时间";
+  try {
+    const d = new Date(value);
+    // 检查日期是否有效
+    if (isNaN(d.getTime())) return String(value);
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  } catch (e) { return String(value); }
 }
 
 function isToday(value) {
