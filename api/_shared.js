@@ -140,7 +140,11 @@ async function readJsonBody(req) {
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
+        // 兼容字符串 chunk（当 req.setEncoding 被设置时）和 Buffer chunk
+        const body = chunks.length > 0 && typeof chunks[0] === "string"
+          ? chunks.join("")
+          : Buffer.concat(chunks).toString("utf8");
+        resolve(JSON.parse(body || "{}"));
       } catch (error) {
         resolve({});
       }

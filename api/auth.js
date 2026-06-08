@@ -101,6 +101,7 @@ async function handleWechatLogin(req, res) {
     });
   }
   const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "wechat_mock", role: user.role || "user" });
+  // 返回完整的 user 数据供前端使用（避免 JWT payload 中的 exp 与用户经验值冲突）
   sendJson(res, 200, { token, user });
 }
 
@@ -141,7 +142,7 @@ async function handleVerifyIdentity(req, res) {
   const updated = await updateUser(current.sub, {
     is_verified: true,
     real_name_hash: crypto.createHash("sha256").update(realName + idLast4).digest("hex").slice(0, 16),
-    credit_score: 10,
+    credit_score: 10, // 实名认证后信用分设为10（基准值）
     badges: newBadges,
     exp: newExp,
     level: newLevel,

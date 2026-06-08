@@ -211,8 +211,9 @@ async function handlePickup(req, res) {
       return;
     }
     const rows = await response.json();
-    const expected = String(rows[0]?.pickup_code || "").toUpperCase();
-    if (!expected || expected !== submittedCode) {
+    const expected = String(rows[0]?.pickup_code || "").toUpperCase().replace(/-/g, "");
+    const submitted = submittedCode.replace(/-/g, "");
+    if (!expected || expected !== submitted) {
       sendJson(res, 400, { error: "取件码不正确" });
       return;
     }

@@ -333,7 +333,8 @@ async function handleWechatLogin(event) {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    currentUser = decodeJwtPayload(payload.token);
+    // 合并 JWT payload 和 user 对象数据（避免 JWT 中的 exp 过期时间覆盖用户经验值）
+    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
@@ -350,7 +351,7 @@ async function handleGuestLogin() {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    currentUser = decodeJwtPayload(payload.token);
+    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
@@ -371,7 +372,7 @@ async function handleVerifyIdentity(event) {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "认证失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    currentUser = decodeJwtPayload(payload.token);
+    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.verifyDialog.close();
@@ -984,9 +985,12 @@ function renderNotifyList() {
   els.notifyList.innerHTML = notifications.map((n) => {
     let actions = "";
     if (n.type === "claim_request" && n.related_record_id) {
+      // 从通知body中提取claim_id，格式为 "claim_id:xxx"
+      const claimIdMatch = (n.body || "").match(/claim_id:([a-zA-Z0-9_]+)/);
+      const claimId = claimIdMatch ? claimIdMatch[1] : n.id;
       actions = `<div style="margin-top:8px;display:flex;gap:8px;">
-        <button class="ghost-button" type="button" data-claim="approve" data-record="${escapeHtml(n.related_record_id)}">同意</button>
-        <button class="ghost-button" type="button" data-claim="reject" data-record="${escapeHtml(n.related_record_id)}">拒绝</button>
+        <button class="ghost-button" type="button" data-claim="approve" data-claim-id="${escapeHtml(claimId)}" data-record="${escapeHtml(n.related_record_id)}">同意</button>
+        <button class="ghost-button" type="button" data-claim="reject" data-claim-id="${escapeHtml(claimId)}" data-record="${escapeHtml(n.related_record_id)}">拒绝</button>
       </div>`;
     }
     return `<div class="notify-item${n.is_read ? " is-read" : ""}">
@@ -1001,12 +1005,12 @@ function renderNotifyList() {
   els.notifyList.querySelectorAll("[data-claim]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const status = btn.dataset.claim;
-      const recordId = btn.dataset.record;
-      // 查找对应的认领申请ID（简化：通过记录ID找最新的pending申请）
+      const claimId = btn.dataset.claimId;
+      if (!claimId) { showToast("无法获取认领申请ID", "error"); return; }
       try {
         const resp = await fetch(`/api/records?action=review-claim`, {
           method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ claim_id: `claim_${recordId}`, status }),
+          body: JSON.stringify({ claim_id: claimId, status }),
         });
         const data = await resp.json();
         if (data.ok) {

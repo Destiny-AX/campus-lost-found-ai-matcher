@@ -12,6 +12,7 @@
   --shadow: 0 2px 12px rgba(0,0,0,0.08); --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
   --side-w: 230px; --inspector-w: 280px;
   --wechat: #07c160;
+  --muted: #6e6e73; --danger: #ff3b30;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -122,9 +123,10 @@ body {
 }
 .search-row input:focus { border-color: var(--blue); }
 .search-row select {
-  padding: 10px 12px; border-radius: var(--radius-sm);
+  padding: 10px 28px 10px 12px; border-radius: var(--radius-sm);
   border: 1px solid var(--border); font-size: 13px; color: var(--text2);
   background: var(--card); outline: none;
+  min-width: 120px; appearance: auto;
 }
 
 /* ============== Card Grid ============== */
@@ -612,8 +614,9 @@ body {
 .location-cascade select:focus, .location-cascade input:focus { border-color: var(--blue); }
 .location-filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .location-filter-row select {
-  padding: 8px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border);
+  padding: 8px 28px 8px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border);
   font-size: 13px; color: var(--text2); background: var(--card); outline: none;
+  min-width: 100px; appearance: auto;
 }
 
 /* ============== Claim Section ============== */
