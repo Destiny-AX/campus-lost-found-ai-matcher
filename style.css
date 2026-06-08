@@ -143,6 +143,25 @@ body {
 .filter-bar .search-box input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
 .filter-bar .search-box .btn { padding: 5px 12px; font-size: 12px; }
 
+/* ============== Filter Chips (filter-group + chip) ============== */
+.filter-group {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.chip {
+  padding: 6px 14px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 13px; color: var(--text2); cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+.chip:hover { background: var(--blue-soft); color: var(--blue); border-color: transparent; }
+.chip.is-active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
 /* ============== Card Grid — 去卡片化，使用分割线布局 ============== */
 .card-grid {
   display: grid;
