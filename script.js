@@ -270,7 +270,9 @@ function restoreAuth() {
   try {
     const payload = decodeJwtPayload(token);
     if (payload.exp && Date.now() / 1000 > payload.exp) { localStorage.removeItem(AUTH_TOKEN_KEY); return; }
-    currentUser = payload;
+    // 页面刷新恢复登录时，JWT的exp是过期时间戳，不能作为经验值使用
+    // 经验值应从用户对象获取，此处先设为0，后续可通过/api/auth?action=me获取完整信息
+    currentUser = { ...payload, exp: 0 };
     updateAuthUI();
   } catch (e) { localStorage.removeItem(AUTH_TOKEN_KEY); }
 }
@@ -333,8 +335,9 @@ async function handleWechatLogin(event) {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    // 合并 JWT payload 和 user 对象数据（避免 JWT 中的 exp 过期时间覆盖用户经验值）
-    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
+    // 合并 JWT payload 和 user 对象数据，显式排除 JWT 标准字段避免覆盖用户数据
+    const jwtPayload = decodeJwtPayload(payload.token);
+    currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
@@ -351,7 +354,8 @@ async function handleGuestLogin() {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
+    const jwtPayload2 = decodeJwtPayload(payload.token);
+    currentUser = { ...jwtPayload2, ...payload.user, exp: payload.user?.exp ?? 0 };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.loginDialog.close();
@@ -372,7 +376,8 @@ async function handleVerifyIdentity(event) {
     const payload = await response.json();
     if (!response.ok) { showToast(payload.error || "认证失败", "error"); return; }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    currentUser = { ...decodeJwtPayload(payload.token), ...payload.user };
+    const jwtPayload3 = decodeJwtPayload(payload.token);
+    currentUser = { ...jwtPayload3, ...payload.user, exp: payload.user?.exp ?? 0 };
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.verifyDialog.close();
@@ -1228,7 +1233,9 @@ function switchAccount(accountId) {
   const acc = getAccounts().find(a => a.id === accountId);
   if (!acc) return false;
   localStorage.setItem(AUTH_TOKEN_KEY, acc.token);
-  currentUser = decodeJwtPayload(acc.token);
+  const jwtPayload = decodeJwtPayload(acc.token);
+  // 切换账号时仅从JWT获取基础信息，完整用户信息需从后端获取
+  currentUser = { ...jwtPayload, exp: jwtPayload.exp || 0 };
   updateAuthUI();
   renderAll();
   showToast(`已切换到 ${acc.nickname}`, "success");
@@ -1417,7 +1424,8 @@ async function handlePublish(event) {
         });
         const expData = await expResp.json();
         if (expData.user) {
-          currentUser = { ...currentUser, ...expData.user };
+          // 显式保留经验值字段，防止后端返回的user对象中exp被JWT exp覆盖
+          currentUser = { ...currentUser, ...expData.user, exp: expData.user.exp ?? currentUser.exp ?? 0 };
           if (expData.levelUp) {
             showAchievementPopup("level_up", `升级啦！Lv.${expData.newLevel} ${LEVEL_TITLES[expData.newLevel] || "拾遗新手"}`);
           }

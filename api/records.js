@@ -1306,14 +1306,30 @@ async function handleSubmitReview(req, res) {
       body: JSON.stringify({ id: reviewId, record_id: recordId, from_user_id: current.sub, to_user_id: toUserId, rating, comment }),
     });
 
-    // 更新信用分和经验（增量更新）
-    if (rating >= 5) {
+    // 更新信用分和经验（先读取当前值，再增量更新）
+    const toUserResp = await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}&select=credit_score,exp,level&limit=1`, { method: "GET" });
+    const toUserRows = await toUserResp.json();
+    const toUser = toUserRows[0];
+    if (toUser) {
+      const currentCredit = typeof toUser.credit_score === "number" ? toUser.credit_score : 0;
+      const currentExp = typeof toUser.exp === "number" ? toUser.exp : 0;
+      const currentLevel = typeof toUser.level === "number" ? toUser.level : 1;
+      let newCredit = currentCredit;
+      let newExp = currentExp;
+      if (rating >= 5) {
+        newCredit = currentCredit + 10;
+        newExp = currentExp + 30;
+      } else if (rating <= 2) {
+        newCredit = Math.max(0, currentCredit - 5);
+      }
+      const newLevel = Math.max(1, Math.floor(1 + Math.sqrt(newExp / 100)));
+      const patch = { credit_score: newCredit };
+      if (newExp !== currentExp) {
+        patch.exp = newExp;
+        patch.level = newLevel;
+      }
       await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}`, {
-        method: "PATCH", body: JSON.stringify({ credit_score: 10, exp: 30 }),
-      });
-    } else if (rating <= 2) {
-      await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}`, {
-        method: "PATCH", body: JSON.stringify({ credit_score: -5 }),
+        method: "PATCH", body: JSON.stringify(patch),
       });
     }
 
@@ -1339,10 +1355,17 @@ async function handleReport(req, res) {
     const recRows = await recResp.json();
     const ownerId = recRows[0]?.owner_id;
     if (ownerId) {
-      // 扣除信用分（增量更新）
-      await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}`, {
-        method: "PATCH", body: JSON.stringify({ credit_score: -20 }),
-      });
+      // 扣除信用分（先读取当前值，再增量更新，最低为0）
+      const ownerResp = await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}&select=credit_score&limit=1`, { method: "GET" });
+      const ownerRows = await ownerResp.json();
+      const owner = ownerRows[0];
+      if (owner) {
+        const currentCredit = typeof owner.credit_score === "number" ? owner.credit_score : 0;
+        const newCredit = Math.max(0, currentCredit - 20);
+        await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}`, {
+          method: "PATCH", body: JSON.stringify({ credit_score: newCredit }),
+        });
+      }
     }
     sendJson(res, 200, { ok: true });
   } catch (error) { sendJson(res, 200, { ok: true, fallback: true }); }
