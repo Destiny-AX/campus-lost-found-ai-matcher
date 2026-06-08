@@ -690,6 +690,7 @@ function renderMatchItem(record, result) {
 }
 
 function renderStats() {
+  // 数据概览页统计（原有逻辑）
   const total = records.length;
   const today = records.filter((r) => isToday(r.time)).length;
   const strong = records.filter((r) => getBestMatch(r).score >= 80).length;
@@ -697,6 +698,51 @@ function renderStats() {
   const metrics = [["发布总数", total], ["今日新增", today], ["高匹配线索", strong], ["语义识别记录", withSemantic]];
   els.metricGrid.innerHTML = metrics
     .map(([label, value]) => `<div class="metric-card"><strong>${label}</strong><span>${value}</span></div>`).join("");
+
+  // 主界面成就统计面板
+  updateHomeStats();
+}
+
+// 更新主界面成就统计面板
+function updateHomeStats() {
+  // 已找回：状态为"已找回"或"已认领"的记录数
+  const recovered = records.filter((r) => r.status === "已找回" || r.status === "已认领").length;
+  // 帮他人找回：当前用户是招领发布者且已被认领的记录
+  const currentId = currentUser?.sub;
+  const helpedOthers = currentId
+    ? records.filter((r) => r.type === "found" && r.owner_id === currentId && r.status === "已认领").length
+    : Math.floor(recovered * 0.6); // 未登录时显示模拟数据（60%的找回是他人帮助）
+  // 进行中：待找回 + 待认领
+  const active = records.filter((r) => r.status === "待找回" || r.status === "待认领").length;
+  // 信用分
+  const credit = currentUser ? (currentUser.credit_score || 100) : 100;
+
+  animateNumber("statTotalRecovered", recovered);
+  animateNumber("statHelpedOthers", helpedOthers);
+  animateNumber("statActiveItems", active);
+  animateNumber("statMyCredit", credit);
+}
+
+// 数字滚动动画
+function animateNumber(elementId, targetValue) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const startValue = parseInt(el.textContent, 10) || 0;
+  if (startValue === targetValue) return;
+
+  const duration = 800;
+  const startTime = performance.now();
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // ease-out-cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(startValue + (targetValue - startValue) * eased);
+    el.textContent = current;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 // ============== 地域筛选渲染 ==============
@@ -1835,8 +1881,10 @@ function createSyntheticImage(seed, label) {
   if (seed.shape === "umbrella") drawUmbrella(ctx, seed);
   if (seed.shape === "key") drawKey(ctx, seed);
   if (seed.shape === "cup") drawCup(ctx, seed);
-  ctx.fillStyle = "rgba(24,32,43,0.72)"; ctx.font = "bold 32px Microsoft YaHei, sans-serif";
-  ctx.fillText(label.slice(0, 10), 54, 424);
+  if (seed.shape === "bag") drawBag(ctx, seed);
+  if (seed.shape === "jewelry") drawJewelry(ctx, seed);
+  if (seed.shape === "book") drawBook(ctx, seed);
+  if (seed.shape === "tablet") drawTablet(ctx, seed);
   return canvas.toDataURL("image/png");
 }
 
@@ -1845,6 +1893,94 @@ function drawEarbud(ctx, s) { roundRect(ctx, 190, 185, 260, 150, 54); ctx.fill()
 function drawUmbrella(ctx, s) { ctx.beginPath(); ctx.arc(320, 250, 150, Math.PI, 0); ctx.lineTo(170, 250); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.strokeStyle = s.secondary; ctx.lineWidth = 18; ctx.beginPath(); ctx.moveTo(320, 250); ctx.lineTo(320, 345); ctx.quadraticCurveTo(320, 390, 370, 370); ctx.stroke(); }
 function drawKey(ctx, s) { ctx.beginPath(); ctx.arc(230, 250, 62, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = s.background; ctx.beginPath(); ctx.arc(230, 250, 28, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = s.primary; roundRect(ctx, 280, 232, 210, 36, 18); ctx.fill(); ctx.fillRect(420, 268, 28, 52); ctx.fillRect(462, 268, 28, 36); }
 function drawCup(ctx, s) { roundRect(ctx, 230, 120, 180, 245, 36); ctx.fill(); ctx.stroke(); ctx.strokeStyle = s.secondary; ctx.beginPath(); ctx.arc(416, 230, 52, -Math.PI / 2, Math.PI / 2); ctx.stroke(); }
+function drawBag(ctx, s) {
+  // 包身：圆角矩形
+  roundRect(ctx, 220, 160, 200, 180, 28);
+  ctx.fill();
+  ctx.stroke();
+  // 半圆形提手
+  ctx.strokeStyle = s.secondary;
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.arc(320, 160, 50, Math.PI, 0);
+  ctx.stroke();
+  // 两条肩带线条
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(240, 170);
+  ctx.lineTo(200, 100);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(400, 170);
+  ctx.lineTo(440, 100);
+  ctx.stroke();
+}
+function drawJewelry(ctx, s) {
+  // 手链主体：圆环
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = s.primary;
+  ctx.beginPath();
+  ctx.arc(320, 240, 90, 0, Math.PI * 2);
+  ctx.stroke();
+  // 圆环上的小圆点装饰
+  ctx.fillStyle = s.secondary;
+  const dots = 6;
+  for (let i = 0; i < dots; i++) {
+    const angle = (Math.PI * 2 * i) / dots;
+    const x = 320 + Math.cos(angle) * 90;
+    const y = 240 + Math.sin(angle) * 90;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 吊坠：底部小圆
+  ctx.fillStyle = s.primary;
+  ctx.beginPath();
+  ctx.arc(320, 360, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = s.secondary;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+function drawBook(ctx, s) {
+  // 书本：竖向圆角矩形
+  roundRect(ctx, 250, 110, 140, 260, 16);
+  ctx.fill();
+  ctx.stroke();
+  // 书脊：左侧竖线
+  ctx.strokeStyle = s.secondary;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(278, 110);
+  ctx.lineTo(278, 370);
+  ctx.stroke();
+  // 文字横线
+  ctx.strokeStyle = s.secondary;
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 5; i++) {
+    const y = 160 + i * 36;
+    ctx.beginPath();
+    ctx.moveTo(300, y);
+    ctx.lineTo(370, y);
+    ctx.stroke();
+  }
+}
+function drawTablet(ctx, s) {
+  // 平板主体：大圆角矩形
+  roundRect(ctx, 170, 130, 300, 220, 24);
+  ctx.fill();
+  ctx.stroke();
+  // 屏幕：内框细线
+  ctx.strokeStyle = s.secondary;
+  ctx.lineWidth = 3;
+  roundRect(ctx, 190, 150, 260, 180, 16);
+  ctx.stroke();
+  // Home 键：底部小圆点
+  ctx.fillStyle = s.secondary;
+  ctx.beginPath();
+  ctx.arc(320, 330, 10, 0, Math.PI * 2);
+  ctx.fill();
+}
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); }
 
 function loadImage(src) { return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = src; }); }

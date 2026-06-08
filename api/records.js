@@ -49,6 +49,7 @@ const SEED_RECORDS = [
       features: ["充电盒", "圆角", "轻微划痕"],
       confidence: 0.88,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "earbud" },
     created_at: "2026-06-05T09:00:00Z",
   },
   {
@@ -79,6 +80,7 @@ const SEED_RECORDS = [
       features: ["充电盒", "圆角", "外观较新"],
       confidence: 0.85,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "earbud" },
     created_at: "2026-06-05T09:15:00Z",
   },
   {
@@ -109,6 +111,7 @@ const SEED_RECORDS = [
       features: ["透明卡套", "小星星贴纸", "卡号8842"],
       confidence: 0.92,
     },
+        visualSeed: { background: "#e8ecf4", primary: "#2563eb", secondary: "#dbeafe", shape: "card" },
     created_at: "2026-06-06T18:00:00Z",
   },
   {
@@ -139,6 +142,7 @@ const SEED_RECORDS = [
       features: ["卡套", "星星贴纸"],
       confidence: 0.9,
     },
+        visualSeed: { background: "#e8ecf4", primary: "#2563eb", secondary: "#dbeafe", shape: "card" },
     created_at: "2026-06-06T18:30:00Z",
   },
   {
@@ -169,6 +173,7 @@ const SEED_RECORDS = [
       features: ["三把钥匙", "绿色小恐龙挂件"],
       confidence: 0.87,
     },
+        visualSeed: { background: "#faf5f0", primary: "#b45309", secondary: "#fcd34d", shape: "key" },
     created_at: "2026-06-07T15:00:00Z",
   },
   {
@@ -199,6 +204,7 @@ const SEED_RECORDS = [
       features: ["三把钥匙", "绿色挂件"],
       confidence: 0.86,
     },
+        visualSeed: { background: "#faf5f0", primary: "#b45309", secondary: "#fcd34d", shape: "key" },
     created_at: "2026-06-07T15:30:00Z",
   },
   {
@@ -229,6 +235,7 @@ const SEED_RECORDS = [
       features: ["折叠伞", "黑色防滑套", "白色波点"],
       confidence: 0.84,
     },
+        visualSeed: { background: "#fef2f2", primary: "#dc2626", secondary: "#fca5a5", shape: "umbrella" },
     created_at: "2026-06-07T20:00:00Z",
   },
   {
@@ -259,6 +266,7 @@ const SEED_RECORDS = [
       features: ["波点图案", "黑色防滑套"],
       confidence: 0.83,
     },
+        visualSeed: { background: "#fef2f2", primary: "#dc2626", secondary: "#fca5a5", shape: "umbrella" },
     created_at: "2026-06-07T20:30:00Z",
   },
   // ============== 扩展示例数据：更多区域和类别 ==============
@@ -290,6 +298,7 @@ const SEED_RECORDS = [
       features: ["尼龙材质", "反光条", "笔记本电脑"],
       confidence: 0.86,
     },
+        visualSeed: { background: "#f5f5f0", primary: "#525252", secondary: "#d4d4d4", shape: "bag" },
     created_at: "2026-06-06T11:00:00Z",
   },
   {
@@ -320,6 +329,7 @@ const SEED_RECORDS = [
       features: ["尼龙材质", "反光条"],
       confidence: 0.84,
     },
+        visualSeed: { background: "#f5f5f0", primary: "#525252", secondary: "#d4d4d4", shape: "bag" },
     created_at: "2026-06-06T11:30:00Z",
   },
   {
@@ -350,6 +360,7 @@ const SEED_RECORDS = [
       features: ["足金", "磨砂纹理", "约15克"],
       confidence: 0.82,
     },
+        visualSeed: { background: "#fffbeb", primary: "#d97706", secondary: "#fde68a", shape: "jewelry" },
     created_at: "2026-06-05T21:00:00Z",
   },
   {
@@ -380,6 +391,7 @@ const SEED_RECORDS = [
       features: ["足金", "磨砂纹理"],
       confidence: 0.8,
     },
+        visualSeed: { background: "#fffbeb", primary: "#d97706", secondary: "#fde68a", shape: "jewelry" },
     created_at: "2026-06-05T21:30:00Z",
   },
   {
@@ -410,6 +422,7 @@ const SEED_RECORDS = [
       features: ["玻璃杯", "黑色硅胶杯套", "logo"],
       confidence: 0.85,
     },
+        visualSeed: { background: "#f0f9ff", primary: "#0891b2", secondary: "#a5f3fc", shape: "cup" },
     created_at: "2026-06-07T14:00:00Z",
   },
   {
@@ -440,6 +453,7 @@ const SEED_RECORDS = [
       features: ["玻璃杯", "黑色杯套"],
       confidence: 0.83,
     },
+        visualSeed: { background: "#f0f9ff", primary: "#0891b2", secondary: "#a5f3fc", shape: "cup" },
     created_at: "2026-06-07T14:30:00Z",
   },
   {
@@ -470,6 +484,7 @@ const SEED_RECORDS = [
       features: ["11寸", "智能双面夹", "深空灰"],
       confidence: 0.9,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "tablet" },
     created_at: "2026-06-08T10:00:00Z",
   },
   {
@@ -500,6 +515,7 @@ const SEED_RECORDS = [
       features: ["平板电脑", "保护套"],
       confidence: 0.87,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "tablet" },
     created_at: "2026-06-08T10:30:00Z",
   },
   {
@@ -530,6 +546,7 @@ const SEED_RECORDS = [
       features: ["羊毛", "小流苏", "手作"],
       confidence: 0.78,
     },
+        visualSeed: { background: "#fdf2f8", primary: "#db2777", secondary: "#fbcfe8", shape: "cup" },
     created_at: "2026-06-04T17:00:00Z",
   },
   {
@@ -560,6 +577,7 @@ const SEED_RECORDS = [
       features: ["流苏", "羊毛"],
       confidence: 0.76,
     },
+        visualSeed: { background: "#fdf2f8", primary: "#db2777", secondary: "#fbcfe8", shape: "cup" },
     created_at: "2026-06-04T17:30:00Z",
   },
   {
@@ -590,6 +608,7 @@ const SEED_RECORDS = [
       features: ["手环", "灰色表带", "细微划痕"],
       confidence: 0.84,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "earbud" },
     created_at: "2026-06-08T08:30:00Z",
   },
   {
@@ -620,6 +639,7 @@ const SEED_RECORDS = [
       features: ["手环", "灰色表带"],
       confidence: 0.82,
     },
+        visualSeed: { background: "#f0f0f5", primary: "#3a3a44", secondary: "#e8e8ed", shape: "earbud" },
     created_at: "2026-06-08T08:50:00Z",
   },
   {
@@ -650,6 +670,7 @@ const SEED_RECORDS = [
       features: ["硬壳", "动漫贴纸", "课堂笔记"],
       confidence: 0.79,
     },
+        visualSeed: { background: "#f0fdf4", primary: "#16a34a", secondary: "#bbf7d0", shape: "book" },
     created_at: "2026-06-07T16:00:00Z",
   },
   {
@@ -680,6 +701,7 @@ const SEED_RECORDS = [
       features: ["硬壳", "贴纸"],
       confidence: 0.77,
     },
+        visualSeed: { background: "#f0fdf4", primary: "#16a34a", secondary: "#bbf7d0", shape: "book" },
     created_at: "2026-06-07T16:40:00Z",
   },
   {
@@ -710,6 +732,7 @@ const SEED_RECORDS = [
       features: ["帆布", "白色小花", "化妆品"],
       confidence: 0.81,
     },
+        visualSeed: { background: "#f5f5f0", primary: "#525252", secondary: "#d4d4d4", shape: "bag" },
     created_at: "2026-06-06T15:00:00Z",
   },
   {
@@ -740,6 +763,7 @@ const SEED_RECORDS = [
       features: ["帆布", "手提袋"],
       confidence: 0.79,
     },
+        visualSeed: { background: "#f5f5f0", primary: "#525252", secondary: "#d4d4d4", shape: "bag" },
     created_at: "2026-06-06T15:30:00Z",
   },
 ];
