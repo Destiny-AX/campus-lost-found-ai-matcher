@@ -18,6 +18,260 @@ const {
 const TABLE = "lost_found_records";
 const memoryRecords = new Map();
 
+// ============== 示例种子数据（Demo 用） ==============
+// 当 Supabase 未配置或为空时，提供默认示例记录供演示
+const SEED_RECORDS = [
+  {
+    id: "demo-lost-01",
+    type: "lost",
+    title: "黑色AirPods Pro耳机盒",
+    category: "电子设备",
+    color: "黑色",
+    location: "南京西路地铁站2号口",
+    event_time: "2026-06-05T08:30",
+    contact: "微信: zhang_san_2024",
+    description: "黑色AirPods Pro充电盒，外壳有轻微划痕，没有耳机在里面。可能在早高峰过安检时掉落。",
+    status: "待找回",
+    item_status: "unknown",
+    city: "上海市",
+    district: "静安区",
+    street: "南京西路",
+    detail_location: "地铁站2号口安检处",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "AirPods Pro充电盒",
+      category: "电子设备",
+      colors: ["黑色"],
+      brand_guess: "Apple",
+      visible_text: [],
+      features: ["充电盒", "圆角", "轻微划痕"],
+      confidence: 0.88,
+    },
+    created_at: "2026-06-05T09:00:00Z",
+  },
+  {
+    id: "demo-found-01",
+    type: "found",
+    title: "黑色无线耳机充电盒",
+    category: "电子设备",
+    color: "黑色",
+    location: "南京西路地铁站2号口",
+    event_time: "2026-06-05T08:45",
+    contact: "电话: 138****5678",
+    description: "早高峰在地铁站2号口捡到黑色耳机充电盒，外观较新，没有耳机。已代为保管。",
+    status: "待认领",
+    item_status: "custody",
+    city: "上海市",
+    district: "静安区",
+    street: "南京西路",
+    detail_location: "地铁站2号口",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "无线耳机充电盒",
+      category: "电子设备",
+      colors: ["黑色"],
+      brand_guess: "未知",
+      visible_text: [],
+      features: ["充电盒", "圆角", "外观较新"],
+      confidence: 0.85,
+    },
+    created_at: "2026-06-05T09:15:00Z",
+  },
+  {
+    id: "demo-lost-02",
+    type: "lost",
+    title: "蓝色学生卡（带卡套）",
+    category: "证件",
+    color: "蓝色",
+    location: "人民广场地铁站换乘通道",
+    event_time: "2026-06-06T17:20",
+    contact: "微信: li_si_campus",
+    description: "蓝色校园卡，装在透明卡套里，卡套上有小星星贴纸。卡号后四位是8842。",
+    status: "待找回",
+    item_status: "unknown",
+    city: "上海市",
+    district: "黄浦区",
+    street: "人民广场",
+    detail_location: "1号线转2号线换乘通道",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "学生校园卡",
+      category: "证件",
+      colors: ["蓝色", "透明"],
+      brand_guess: "未知",
+      visible_text: ["校园卡"],
+      features: ["透明卡套", "小星星贴纸", "卡号8842"],
+      confidence: 0.92,
+    },
+    created_at: "2026-06-06T18:00:00Z",
+  },
+  {
+    id: "demo-found-02",
+    type: "found",
+    title: "蓝色校园卡",
+    category: "证件",
+    color: "蓝色",
+    location: "人民广场地铁站服务台",
+    event_time: "2026-06-06T17:50",
+    contact: "地铁站服务台 021-64370000",
+    description: "在换乘通道捡到蓝色校园卡，已交至地铁站服务台。卡套有星星贴纸。",
+    status: "待认领",
+    item_status: "institution",
+    city: "上海市",
+    district: "黄浦区",
+    street: "人民广场",
+    detail_location: "地铁站服务中心",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "蓝色校园卡",
+      category: "证件",
+      colors: ["蓝色"],
+      brand_guess: "未知",
+      visible_text: ["校园卡"],
+      features: ["卡套", "星星贴纸"],
+      confidence: 0.9,
+    },
+    created_at: "2026-06-06T18:30:00Z",
+  },
+  {
+    id: "demo-lost-03",
+    type: "lost",
+    title: "银色钥匙串（3把+绿色挂件）",
+    category: "钥匙",
+    color: "银色",
+    location: "徐家汇美罗城B1层",
+    event_time: "2026-06-07T14:00",
+    contact: "电话: 159****2341",
+    description: "三把银色钥匙，带一个绿色小恐龙挂件。可能在美罗城B1美食区遗失。",
+    status: "待找回",
+    item_status: "unknown",
+    city: "上海市",
+    district: "徐汇区",
+    street: "徐家汇",
+    detail_location: "美罗城B1层美食区",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "银色钥匙串",
+      category: "钥匙",
+      colors: ["银色", "绿色"],
+      brand_guess: "未知",
+      visible_text: [],
+      features: ["三把钥匙", "绿色小恐龙挂件"],
+      confidence: 0.87,
+    },
+    created_at: "2026-06-07T15:00:00Z",
+  },
+  {
+    id: "demo-found-03",
+    type: "found",
+    title: "银色钥匙串",
+    category: "钥匙",
+    color: "银色",
+    location: "徐家汇美罗城B1层",
+    event_time: "2026-06-07T14:30",
+    contact: "微信: wang_wu_finder",
+    description: "在美食区座位下捡到三把银色钥匙，带绿色挂件。已放在美罗城服务台。",
+    status: "待认领",
+    item_status: "custody",
+    city: "上海市",
+    district: "徐汇区",
+    street: "徐家汇",
+    detail_location: "美罗城服务台",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "银色钥匙串",
+      category: "钥匙",
+      colors: ["银色", "绿色"],
+      brand_guess: "未知",
+      visible_text: [],
+      features: ["三把钥匙", "绿色挂件"],
+      confidence: 0.86,
+    },
+    created_at: "2026-06-07T15:30:00Z",
+  },
+  {
+    id: "demo-lost-04",
+    type: "lost",
+    title: "红色折叠伞",
+    category: "生活用品",
+    color: "红色",
+    location: "陆家嘴地铁站3号口",
+    event_time: "2026-06-07T19:10",
+    contact: "微信: zhao_liu_umbrella",
+    description: "红色折叠伞，伞柄有黑色防滑套，伞面上有白色波点图案。下班高峰时遗失。",
+    status: "待找回",
+    item_status: "unknown",
+    city: "上海市",
+    district: "浦东新区",
+    street: "陆家嘴",
+    detail_location: "地铁站3号口出站闸机旁",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "红色折叠伞",
+      category: "生活用品",
+      colors: ["红色", "白色", "黑色"],
+      brand_guess: "未知",
+      visible_text: [],
+      features: ["折叠伞", "黑色防滑套", "白色波点"],
+      confidence: 0.84,
+    },
+    created_at: "2026-06-07T20:00:00Z",
+  },
+  {
+    id: "demo-found-04",
+    type: "found",
+    title: "红色波点折叠伞",
+    category: "生活用品",
+    color: "红色",
+    location: "陆家嘴地铁站3号口",
+    event_time: "2026-06-07T19:30",
+    contact: "电话: 136****8910",
+    description: "在3号口闸机旁捡到红色波点伞，伞柄有黑色防滑套。我代为保管，请联系取回。",
+    status: "待认领",
+    item_status: "custody",
+    city: "上海市",
+    district: "浦东新区",
+    street: "陆家嘴",
+    detail_location: "3号口出站闸机旁",
+    owner_id: "",
+    image_data: "",
+    image_feature: null,
+    semantic: {
+      object_name: "红色波点折叠伞",
+      category: "生活用品",
+      colors: ["红色", "白色"],
+      brand_guess: "未知",
+      visible_text: [],
+      features: ["波点图案", "黑色防滑套"],
+      confidence: 0.83,
+    },
+    created_at: "2026-06-07T20:30:00Z",
+  },
+];
+
+// 初始化时将种子数据写入内存（仅当内存为空时）
+function initSeedRecords() {
+  if (memoryRecords.size === 0) {
+    SEED_RECORDS.forEach((record) => {
+      memoryRecords.set(record.id, record);
+    });
+  }
+}
+
 const handler = async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -42,6 +296,9 @@ module.exports.memoryRecords = memoryRecords;
 async function handleList(req, res) {
   const current = getCurrentUser(req);
   const config = getSupabaseConfig();
+
+  // 初始化示例种子数据（仅当内存为空时）
+  initSeedRecords();
 
   // 始终合并内存中的记录，确保 fallback 写入的记录也能被读到
   const memoryRows = Array.from(memoryRecords.values()).map((row) => fromMemoryRow(row, current));
@@ -362,6 +619,11 @@ function toMemoryRow(record) {
     image_feature: record.imageFeature,
     semantic: record.semantic,
     created_at: record.createdAt,
+    city: record.city || "上海市",
+    district: record.district || "",
+    street: record.street || "",
+    detail_location: record.detail_location || "",
+    claim_question: record.claim_question || "",
   };
 }
 
@@ -383,8 +645,25 @@ function fuzzifyLocation(location) {
 
 function fuzzifyTime(timeStr) {
   if (!timeStr) return "未知时间";
+  // 如果是自然语言描述（如"今天早晨"、"5月1日下午"），直接模糊化返回
+  const naturalLangPattern = /^(今天|昨天|前天|上周|本周|几天前|早晨|上午|下午|晚上|凌晨|刚刚|不久前)/;
+  const relativePattern = /^(\d+天前|\d+周前|\d+小时前|\d+分钟前)/;
+  const datePattern = /^(\d{1,2})月(\d{1,2})日/;
+  if (naturalLangPattern.test(timeStr) || relativePattern.test(timeStr)) {
+    // 提取时间段并模糊化
+    const periodMatch = timeStr.match(/(早晨|上午|下午|晚上|凌晨)/);
+    const period = periodMatch ? periodMatch[1] : "";
+    const dayMatch = timeStr.match(/^(今天|昨天|前天|\d+天前)/);
+    const day = dayMatch ? dayMatch[1] : "";
+    if (day && period) return `${day}${period}`;
+    if (day) return `${day}`;
+    if (period) return `某${period}`;
+    return timeStr;
+  }
+  // 尝试解析为标准日期格式
   try {
     const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return timeStr; // 无法解析则原样返回
     const hour = date.getHours();
     const period = hour < 6 ? "凌晨" : hour < 12 ? "上午" : hour < 18 ? "下午" : "晚上";
     const dayDiff = Math.floor((Date.now() - date.getTime()) / 86400000);
@@ -393,7 +672,7 @@ function fuzzifyTime(timeStr) {
     if (dayDiff < 7) return `${dayDiff}天前${period}`;
     return `${date.getMonth() + 1}月${date.getDate()}日${period}`;
   } catch (error) {
-    return "未知时间";
+    return timeStr || "未知时间";
   }
 }
 
@@ -428,13 +707,13 @@ async function handleClaimRequest(req, res) {
     const recRows = await recResp.json();
     const ownerId = recRows[0]?.owner_id;
     const title = recRows[0]?.title || "物品";
-    // 发送通知给发布者
+    // 发送通知给发布者（body中包含claim_id供前端审核使用）
     if (ownerId) {
       await supabaseFetch(config, `/rest/v1/shiyun_notifications`, {
         method: "POST",
         body: JSON.stringify({
           id: `notif_${Date.now()}`, user_id: ownerId, type: "claim_request",
-          title: "有人申请认领", body: `有人申请认领你的「${title}」，请查看并审核`, related_record_id: recordId,
+          title: "有人申请认领", body: `有人申请认领你的「${title}」，请查看并审核。claim_id:${claimId}`, related_record_id: recordId,
         }),
       });
     }
@@ -568,7 +847,7 @@ async function handleReport(req, res) {
     const recRows = await recResp.json();
     const ownerId = recRows[0]?.owner_id;
     if (ownerId) {
-      // 扣除信用分
+      // 扣除信用分（增量更新）
       await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}`, {
         method: "PATCH", body: JSON.stringify({ credit_score: -20 }),
       });
