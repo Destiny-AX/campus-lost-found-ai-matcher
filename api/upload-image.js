@@ -34,6 +34,12 @@ const handler = async function handler(req, res) {
     const mimeType = match[1];
     const ext = match[2] === "jpeg" ? "jpg" : match[2];
     const base64Data = match[3];
+    // 校验MIME类型白名单，防止上传非图片文件
+    const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"];
+    if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+      sendJson(res, 400, { error: "不支持的图片格式，仅允许 JPG/PNG/GIF/WebP/BMP" });
+      return;
+    }
     const buffer = Buffer.from(base64Data, "base64");
 
     // 限制大小 5MB

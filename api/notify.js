@@ -116,12 +116,12 @@ async function handlePush(req, res) {
     sendJson(res, 401, { error: "Not authenticated" });
     return;
   }
+  // 限制：只能向自己推送通知（内部调用使用 pushNotification 导出函数）
   const body = await readJsonBody(req);
-  const userId = String(body.user_id || "").trim();
   const type = String(body.type || "info").trim();
   const title = String(body.title || "").trim();
   const bodyText = String(body.body || "").trim();
-  const relatedRecordId = String(body.related_record_id || "").trim();
+  const relatedRecordId = String(body.related_record_id || "").slice(0, 60).trim();
 
   if (!title) {
     sendJson(res, 400, { error: "title is required" });
@@ -130,7 +130,7 @@ async function handlePush(req, res) {
 
   const notification = {
     id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    user_id: userId || current.sub,
+    user_id: current.sub,
     type,
     title,
     body: bodyText,

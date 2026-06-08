@@ -112,8 +112,10 @@ function getCurrentUser(req) {
   return verifyJwt(token);
 }
 
-// Supabase REST 请求封装
+// Supabase REST 请求封装（含超时控制）
 function supabaseFetch(config, path, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   return fetch(`${config.url}${path}`, {
     ...options,
     headers: {
@@ -122,7 +124,8 @@ function supabaseFetch(config, path, options = {}) {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
 }
 
 // 读取请求体（兼容 Vercel 已解析与原生 http 流）

@@ -237,6 +237,7 @@ function bindEvents() {
 }
 
 function bindDropUpload() {
+  if (!els.dropZone) return;
   ["dragenter", "dragover"].forEach((e) => {
     els.dropZone.addEventListener(e, (ev) => { ev.preventDefault(); els.dropZone.classList.add("is-dragging"); });
   });
@@ -315,7 +316,7 @@ function openUserDialog() {
   }
 
   renderAccountList();
-  document.querySelector("#userDialog").showModal();
+  document.querySelector("#userDialog")?.showModal();
 }
 
 function authHeaders() {
@@ -1300,16 +1301,24 @@ async function handleImageUpload(event) {
 
 async function processUploadedImage(file) {
   if (!file.type.startsWith("image/")) { renderUploadMessage("请选择图片文件。"); return; }
-  const rawDataUrl = await readFileAsDataURL(file);
-  const dataUrl = await resizeImageDataUrl(rawDataUrl, 980, 0.82);
-  uploadedImageData = dataUrl;
-  uploadedImageUrl = ""; // 重置 Storage URL
-  uploadedSemantic = null;
-  uploadedFeature = await extractImageFeatures(dataUrl);
-  els.imagePreview.innerHTML = `<img src="${dataUrl}" alt="上传的物品图片预览" />`;
-  renderFeaturePreview(uploadedFeature, null, "正在调用视觉模型进行语义识别...");
-  uploadedSemantic = await analyzeImageSemantics(dataUrl);
-  renderFeaturePreview(uploadedFeature, uploadedSemantic);
+  try {
+    const rawDataUrl = await readFileAsDataURL(file);
+    const dataUrl = await resizeImageDataUrl(rawDataUrl, 980, 0.82);
+    uploadedImageData = dataUrl;
+    uploadedImageUrl = ""; // 重置 Storage URL
+    uploadedSemantic = null;
+    uploadedFeature = await extractImageFeatures(dataUrl);
+    els.imagePreview.innerHTML = `<img src="${dataUrl}" alt="上传的物品图片预览" />`;
+    renderFeaturePreview(uploadedFeature, null, "正在调用视觉模型进行语义识别...");
+    uploadedSemantic = await analyzeImageSemantics(dataUrl);
+    renderFeaturePreview(uploadedFeature, uploadedSemantic);
+  } catch (e) {
+    renderUploadMessage("图片处理失败，请重试或换一张图片。");
+    uploadedImageData = "";
+    uploadedImageUrl = "";
+    uploadedFeature = null;
+    uploadedSemantic = null;
+  }
 }
 
 function renderUploadMessage(message) {
