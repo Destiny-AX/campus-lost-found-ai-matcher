@@ -171,19 +171,27 @@ async function handleAddExp(req, res) {
     sendJson(res, 400, { error: "Invalid action" });
     return;
   }
-  const user = await fetchUserById(current.sub);
-  const oldExp = user?.exp || 0;
-  const oldLevel = user?.level || 1;
-  const newExp = oldExp + delta;
-  const newLevel = calculateLevel(newExp);
-  const patch = { exp: newExp, level: newLevel };
-  if (action === "publish") {
-    patch.total_published = (user?.total_published || 0) + 1;
+  const updated = await updateUserWithLock(current.sub, (user) => {
+    const oldExp = user?.exp || 0;
+    const oldLevel = user?.level || 1;
+    const newExp = oldExp + delta;
+    const newLevel = calculateLevel(newExp);
+    const patch = { exp: newExp, level: newLevel };
+    if (action === "publish") {
+      patch.total_published = (user?.total_published || 0) + 1;
+    }
+    if (action === "help") {
+      patch.total_helped = (user?.total_helped || 0) + 1;
+    }
+    return patch;
+  });
+  if (!updated) {
+    sendJson(res, 500, { error: "更新失败" });
+    return;
   }
-  if (action === "help") {
-    patch.total_helped = (user?.total_helped || 0) + 1;
-  }
-  const updated = await updateUser(current.sub, patch);
+  const oldExp = (updated.exp || 0) - delta;
+  const oldLevel = calculateLevel(oldExp);
+  const newLevel = updated.level || 1;
   sendJson(res, 200, { user: updated, expDelta: delta, levelUp: newLevel > oldLevel, newLevel });
 }
 
@@ -309,6 +317,7 @@ async function createUser(fields) {
     is_institution: false,
     institution_name: "",
     role: fields.role || "user",
+    version: 1,
     created_at: now,
   };
   const config = getSupabaseConfig();
@@ -368,6 +377,48 @@ async function updateUser(id, patch) {
   }
 }
 
+// 乐观锁更新：先读取当前 version，PATCH 时带上 version=eq.N 条件，失败则重试一次
+async function updateUserWithLock(id, patchMaker, maxRetries = 2) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    const exist = memoryUsers.get(id) || { id };
+    const patch = typeof patchMaker === "function" ? patchMaker(exist) : patchMaker;
+    const merged = { ...exist, ...patch, version: (exist.version || 1) + 1 };
+    memoryUsers.set(id, merged);
+    return merged;
+  }
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const user = await fetchUserById(id);
+    if (!user) return null;
+    const currentVersion = user.version || 1;
+    const patch = typeof patchMaker === "function" ? patchMaker(user) : patchMaker;
+    const body = { ...patch, version: currentVersion + 1 };
+    try {
+      const response = await supabaseFetch(
+        config,
+        `/rest/v1/${USERS_TABLE}?id=eq.${encodeURIComponent(id)}&version=eq.${currentVersion}`,
+        {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (response.ok) {
+        const rows = await response.json();
+        return rows[0] || { id, ...body };
+      }
+      // 409/404 等乐观锁冲突，继续重试
+    } catch (error) {
+      // 网络错误，继续重试
+    }
+  }
+  // 重试耗尽，回退到普通更新（保证可用性）
+  const user = await fetchUserById(id);
+  const patch = typeof patchMaker === "function" ? patchMaker(user || { id }) : patchMaker;
+  return updateUser(id, patch);
+}
+
 // 导出供其他模块使用
 module.exports.fetchUserById = fetchUserById;
 module.exports.updateUser = updateUser;
+module.exports.updateUserWithLock = updateUserWithLock;

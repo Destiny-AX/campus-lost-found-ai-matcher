@@ -14,6 +14,7 @@ const {
   getCurrentUser,
   safeErrorText,
 } = require("./_shared");
+const { updateUserWithLock } = require("./auth");
 
 const TABLE = "lost_found_records";
 const memoryRecords = new Map();
@@ -1312,14 +1313,10 @@ async function handleSubmitReview(req, res) {
       body: JSON.stringify({ id: reviewId, record_id: recordId, from_user_id: current.sub, to_user_id: toUserId, rating, comment }),
     });
 
-    // 更新信用分和经验（先读取当前值，再增量更新）
-    const toUserResp = await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}&select=credit_score,exp,level&limit=1`, { method: "GET" });
-    const toUserRows = await toUserResp.json();
-    const toUser = toUserRows[0];
-    if (toUser) {
+    // 更新信用分和经验（使用乐观锁防止并发覆盖）
+    await updateUserWithLock(toUserId, (toUser) => {
       const currentCredit = typeof toUser.credit_score === "number" ? toUser.credit_score : 0;
       const currentExp = typeof toUser.exp === "number" ? toUser.exp : 0;
-      const currentLevel = typeof toUser.level === "number" ? toUser.level : 1;
       let newCredit = currentCredit;
       let newExp = currentExp;
       if (rating >= 5) {
@@ -1334,10 +1331,8 @@ async function handleSubmitReview(req, res) {
         patch.exp = newExp;
         patch.level = newLevel;
       }
-      await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(toUserId)}`, {
-        method: "PATCH", body: JSON.stringify(patch),
-      });
-    }
+      return patch;
+    });
 
     sendJson(res, 200, { ok: true });
   } catch (error) { sendJson(res, 500, { ok: false, error: "评价操作失败" }); }
@@ -1373,17 +1368,12 @@ async function handleReport(req, res) {
     });
 
     if (ownerId) {
-      // 扣除信用分（先读取当前值，再增量更新，最低为0）
-      const ownerResp = await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}&select=credit_score&limit=1`, { method: "GET" });
-      const ownerRows = await ownerResp.json();
-      const owner = ownerRows[0];
-      if (owner) {
+      // 扣除信用分（使用乐观锁防止并发覆盖，最低为0）
+      await updateUserWithLock(ownerId, (owner) => {
         const currentCredit = typeof owner.credit_score === "number" ? owner.credit_score : 0;
         const newCredit = Math.max(0, currentCredit - 20);
-        await supabaseFetch(config, `/rest/v1/shiyun_users?id=eq.${encodeURIComponent(ownerId)}`, {
-          method: "PATCH", body: JSON.stringify({ credit_score: newCredit }),
-        });
-      }
+        return { credit_score: newCredit };
+      });
     }
     sendJson(res, 200, { ok: true });
   } catch (error) { sendJson(res, 500, { ok: false, error: "举报操作失败" }); }

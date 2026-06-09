@@ -179,6 +179,11 @@ async function handlePickup(req, res) {
   if (!config) {
     const memRow = memoryRecords.get(recordId);
     if (memRow && memRow.pickup_code) {
+      // 权限校验：只有发布者或认领者才能取件
+      if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
+        sendJson(res, 403, { error: "只有发布者或认领者才能取件" });
+        return;
+      }
       const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
       const submitted = submittedCode.replace(/-/g, "");
       if (expected !== submitted) {
@@ -196,12 +201,15 @@ async function handlePickup(req, res) {
   try {
     const response = await supabaseFetch(
       config,
-      `/rest/v1/${RECORDS_TABLE}?id=eq.${encodeURIComponent(recordId)}&select=pickup_code&limit=1`,
+      `/rest/v1/${RECORDS_TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id,claimed_by,pickup_code&limit=1`,
       { method: "GET" },
     );
     if (!response.ok) {
       const memRow = memoryRecords.get(recordId);
       if (memRow && memRow.pickup_code) {
+        if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
+          sendJson(res, 403, { error: "只有发布者或认领者才能取件" }); return;
+        }
         const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
         const submitted = submittedCode.replace(/-/g, "");
         if (expected !== submitted) { sendJson(res, 400, { error: "取件码不正确" }); return; }
@@ -211,7 +219,17 @@ async function handlePickup(req, res) {
       return;
     }
     const rows = await response.json();
-    const expected = String(rows[0]?.pickup_code || "").toUpperCase().replace(/-/g, "");
+    const record = rows[0];
+    if (!record) {
+      sendJson(res, 404, { error: "记录不存在" });
+      return;
+    }
+    // 权限校验：只有发布者或认领者才能取件
+    if (record.owner_id !== current.sub && record.claimed_by !== current.sub) {
+      sendJson(res, 403, { error: "只有发布者或认领者才能取件" });
+      return;
+    }
+    const expected = String(record.pickup_code || "").toUpperCase().replace(/-/g, "");
     const submitted = submittedCode.replace(/-/g, "");
     if (!expected || expected !== submitted) {
       sendJson(res, 400, { error: "取件码不正确" });
@@ -231,6 +249,9 @@ async function handlePickup(req, res) {
   } catch (error) {
     const memRow = memoryRecords.get(recordId);
     if (memRow && memRow.pickup_code) {
+      if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
+        sendJson(res, 403, { error: "只有发布者或认领者才能取件" }); return;
+      }
       const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
       const submitted = submittedCode.replace(/-/g, "");
       if (expected !== submitted) { sendJson(res, 400, { error: "取件码不正确" }); return; }
