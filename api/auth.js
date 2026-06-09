@@ -160,8 +160,15 @@ async function handleAddExp(req, res) {
   const body = await readJsonBody(req);
   const delta = parseInt(body.delta || 0, 10);
   const action = String(body.action || "").trim();
-  if (!delta || delta <= 0) {
+  // 限制单次经验值增量上限，防止恶意刷级
+  if (!delta || delta <= 0 || delta > 1000) {
     sendJson(res, 400, { error: "Invalid delta" });
+    return;
+  }
+  // action 白名单校验
+  const ALLOWED_ACTIONS = ["publish", "help", ""];
+  if (!ALLOWED_ACTIONS.includes(action)) {
+    sendJson(res, 400, { error: "Invalid action" });
     return;
   }
   const user = await fetchUserById(current.sub);

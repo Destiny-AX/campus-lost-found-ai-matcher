@@ -1235,8 +1235,9 @@ function switchAccount(accountId) {
   if (!acc) return false;
   localStorage.setItem(AUTH_TOKEN_KEY, acc.token);
   const jwtPayload = decodeJwtPayload(acc.token);
-  // 切换账号时仅从JWT获取基础信息，完整用户信息需从后端获取
-  currentUser = { ...jwtPayload, exp: jwtPayload.exp || 0 };
+  // 切换账号时仅从JWT获取基础信息；JWT的exp是过期时间戳，不能作为经验值
+  // 经验值先设为0，后续通过/api/auth?action=me或add-exp刷新
+  currentUser = { ...jwtPayload, exp: 0 };
   updateAuthUI();
   renderAll();
   showToast(`已切换到 ${acc.nickname}`, "success");
