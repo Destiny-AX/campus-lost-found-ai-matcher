@@ -16,6 +16,7 @@ const {
   signJwt,
   getCurrentUser,
   safeErrorText,
+  checkRateLimit,
 } = require("./_shared");
 
 const USERS_TABLE = "shiyun_users";
@@ -54,6 +55,16 @@ module.exports = async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const action = url.searchParams.get("action") || "me";
+
+    // 限流：登录类接口每IP每分钟最多10次
+    if (["wechat-login", "guest-login", "verify-identity"].includes(action)) {
+      const clientIp = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
+      const limit = checkRateLimit(`auth:${clientIp}`, 60000, 10);
+      if (!limit.ok) {
+        sendJson(res, 429, { error: "请求过于频繁，请稍后再试", retryAfter: limit.retryAfter });
+        return;
+      }
+    }
 
     if (action === "me") return handleMe(req, res);
     if (action === "wechat-login") return handleWechatLogin(req, res);

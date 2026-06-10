@@ -13,6 +13,9 @@ const {
   sendJson,
   getCurrentUser,
   safeErrorText,
+  validateString,
+  validateInt,
+  checkRateLimit,
 } = require("./_shared");
 const { updateUserWithLock } = require("./auth");
 
@@ -767,6 +770,20 @@ const handler = async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const action = url.searchParams.get("action") || "";
+
+    // 限流：写操作每用户每分钟最多20次
+    const current = getCurrentUser(req);
+    const rateKey = current ? `records:user:${current.sub}` : `records:ip:${req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown"}`;
+    const writeActions = ["claim-request", "review-claim", "submit-review", "report"];
+    const isWrite = writeActions.includes(action) || req.method === "POST" || req.method === "DELETE" || req.method === "PATCH";
+    if (isWrite) {
+      const limit = checkRateLimit(rateKey, 60000, 20);
+      if (!limit.ok) {
+        sendJson(res, 429, { error: "请求过于频繁，请稍后再试", retryAfter: limit.retryAfter });
+        return;
+      }
+    }
+
     if (action === "claim-request") return await handleClaimRequest(req, res);
     if (action === "review-claim") return await handleReviewClaim(req, res);
     if (action === "submit-review") return await handleSubmitReview(req, res);
@@ -1181,9 +1198,12 @@ async function handleClaimRequest(req, res) {
   const current = getCurrentUser(req);
   if (!current) { sendJson(res, 401, { error: "请先登录" }); return; }
   const body = await readJsonBody(req);
-  const recordId = String(body.record_id || "").trim();
-  const answer = String(body.answer || "").trim();
-  if (!recordId || !answer) { sendJson(res, 400, { error: "缺少记录ID或回答" }); return; }
+  const recordIdVal = validateString(body.record_id, { required: true, name: "记录ID" });
+  if (!recordIdVal.ok) { sendJson(res, 400, { error: recordIdVal.error }); return; }
+  const answerVal = validateString(body.answer, { required: true, minLength: 1, maxLength: 500, name: "回答" });
+  if (!answerVal.ok) { sendJson(res, 400, { error: answerVal.error }); return; }
+  const recordId = recordIdVal.value;
+  const answer = answerVal.value;
 
   const config = getSupabaseConfig();
   if (!config) { sendJson(res, 200, { ok: true, fallback: true }); return; }
@@ -1221,9 +1241,12 @@ async function handleReviewClaim(req, res) {
   const current = getCurrentUser(req);
   if (!current) { sendJson(res, 401, { error: "请先登录" }); return; }
   const body = await readJsonBody(req);
-  const claimId = String(body.claim_id || "").trim();
-  const status = String(body.status || "").trim(); // "approved" or "rejected"
-  if (!claimId || !["approved", "rejected"].includes(status)) { sendJson(res, 400, { error: "参数错误" }); return; }
+  const claimIdVal = validateString(body.claim_id, { required: true, name: "认领申请ID" });
+  if (!claimIdVal.ok) { sendJson(res, 400, { error: claimIdVal.error }); return; }
+  const statusVal = validateString(body.status, { required: true, enum: ["approved", "rejected"], name: "审核状态" });
+  if (!statusVal.ok) { sendJson(res, 400, { error: statusVal.error }); return; }
+  const claimId = claimIdVal.value;
+  const status = statusVal.value;
 
   const config = getSupabaseConfig();
   if (!config) { sendJson(res, 200, { ok: true, fallback: true }); return; }
@@ -1279,10 +1302,15 @@ async function handleSubmitReview(req, res) {
   const current = getCurrentUser(req);
   if (!current) { sendJson(res, 401, { error: "请先登录" }); return; }
   const body = await readJsonBody(req);
-  const recordId = String(body.record_id || "").trim();
-  const rating = parseInt(body.rating || 0, 10);
-  const comment = String(body.comment || "").trim();
-  if (!recordId || !rating || rating < 1 || rating > 5) { sendJson(res, 400, { error: "评分必须在1-5之间" }); return; }
+  const recordIdVal = validateString(body.record_id, { required: true, name: "记录ID" });
+  if (!recordIdVal.ok) { sendJson(res, 400, { error: recordIdVal.error }); return; }
+  const ratingVal = validateInt(body.rating, { required: true, min: 1, max: 5, name: "评分" });
+  if (!ratingVal.ok) { sendJson(res, 400, { error: ratingVal.error }); return; }
+  const commentVal = validateString(body.comment, { maxLength: 500, name: "评论" });
+  if (!commentVal.ok) { sendJson(res, 400, { error: commentVal.error }); return; }
+  const recordId = recordIdVal.value;
+  const rating = ratingVal.value;
+  const comment = commentVal.value;
 
   const config = getSupabaseConfig();
   if (!config) { sendJson(res, 200, { ok: true, fallback: true }); return; }
@@ -1343,9 +1371,12 @@ async function handleReport(req, res) {
   const current = getCurrentUser(req);
   if (!current) { sendJson(res, 401, { error: "请先登录" }); return; }
   const body = await readJsonBody(req);
-  const recordId = String(body.record_id || "").trim();
-  const reason = String(body.reason || "").trim();
-  if (!recordId) { sendJson(res, 400, { error: "缺少记录ID" }); return; }
+  const recordIdVal = validateString(body.record_id, { required: true, name: "记录ID" });
+  if (!recordIdVal.ok) { sendJson(res, 400, { error: recordIdVal.error }); return; }
+  const reasonVal = validateString(body.reason, { maxLength: 500, name: "举报原因" });
+  if (!reasonVal.ok) { sendJson(res, 400, { error: reasonVal.error }); return; }
+  const recordId = recordIdVal.value;
+  const reason = reasonVal.value;
 
   const config = getSupabaseConfig();
   if (!config) { sendJson(res, 200, { ok: true, fallback: true }); return; }

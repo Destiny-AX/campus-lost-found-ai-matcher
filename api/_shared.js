@@ -166,6 +166,63 @@ function safeErrorText(value) {
   return String(value || "").slice(0, 1200);
 }
 
+// ============== 统一输入校验工具 ==============
+
+function validateString(value, options = {}) {
+  const str = String(value || "").trim();
+  if (options.required && !str) return { ok: false, error: options.name ? `${options.name}不能为空` : "字段不能为空" };
+  if (options.minLength && str.length < options.minLength) return { ok: false, error: `${options.name || "字段"}长度不能少于${options.minLength}个字符` };
+  if (options.maxLength && str.length > options.maxLength) return { ok: false, error: `${options.name || "字段"}长度不能超过${options.maxLength}个字符` };
+  if (options.pattern && !options.pattern.test(str)) return { ok: false, error: options.patternError || `${options.name || "字段"}格式不正确` };
+  if (options.enum && !options.enum.includes(str)) return { ok: false, error: `${options.name || "字段"}必须是以下之一：${options.enum.join("、")}` };
+  return { ok: true, value: str };
+}
+
+function validateInt(value, options = {}) {
+  const num = parseInt(value, 10);
+  if (Number.isNaN(num)) return { ok: false, error: `${options.name || "字段"}必须是整数` };
+  if (options.min !== undefined && num < options.min) return { ok: false, error: `${options.name || "字段"}不能小于${options.min}` };
+  if (options.max !== undefined && num > options.max) return { ok: false, error: `${options.name || "字段"}不能大于${options.max}` };
+  return { ok: true, value: num };
+}
+
+function validateArray(value, options = {}) {
+  const arr = Array.isArray(value) ? value : [];
+  if (options.required && arr.length === 0) return { ok: false, error: `${options.name || "字段"}不能为空数组` };
+  if (options.maxLength && arr.length > options.maxLength) return { ok: false, error: `${options.name || "字段"}不能超过${options.maxLength}项` };
+  return { ok: true, value: arr };
+}
+
+// ============== 简易内存限流器 ==============
+// 基于用户ID或IP的滑动窗口限流，适用于 Serverless 环境
+const _rateLimitMap = new Map();
+
+function checkRateLimit(key, windowMs = 60000, maxRequests = 10) {
+  const now = Date.now();
+  const record = _rateLimitMap.get(key);
+  if (!record) {
+    _rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return { ok: true };
+  }
+  if (now > record.resetAt) {
+    _rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return { ok: true };
+  }
+  if (record.count >= maxRequests) {
+    return { ok: false, retryAfter: Math.ceil((record.resetAt - now) / 1000) };
+  }
+  record.count += 1;
+  return { ok: true };
+}
+
+// 定期清理过期的限流记录（每5分钟）
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of _rateLimitMap.entries()) {
+    if (now > record.resetAt) _rateLimitMap.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 // 生成防混淆取件码字符（剔除 0/O/1/I/L）
 const PICKUP_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function generatePickupCode(length = 6) {
@@ -188,4 +245,8 @@ module.exports = {
   sendJson,
   safeErrorText,
   generatePickupCode,
+  validateString,
+  validateInt,
+  validateArray,
+  checkRateLimit,
 };
