@@ -259,29 +259,29 @@
               <label>
                 城市
                 <select name="city" required>
-                  <option value="上海市" selected>上海市</option>
+                  <option value="北京市" selected>北京市</option>
                 </select>
               </label>
               <label>
                 区/县
                 <select name="district" required id="districtSelect">
                   <option value="">请选择</option>
-                  <option value="黄浦区">黄浦区</option>
-                  <option value="静安区">静安区</option>
-                  <option value="徐汇区">徐汇区</option>
-                  <option value="长宁区">长宁区</option>
-                  <option value="普陀区">普陀区</option>
-                  <option value="虹口区">虹口区</option>
-                  <option value="杨浦区">杨浦区</option>
-                  <option value="浦东新区">浦东新区</option>
-                  <option value="闵行区">闵行区</option>
-                  <option value="宝山区">宝山区</option>
-                  <option value="嘉定区">嘉定区</option>
-                  <option value="金山区">金山区</option>
-                  <option value="松江区">松江区</option>
-                  <option value="青浦区">青浦区</option>
-                  <option value="奉贤区">奉贤区</option>
-                  <option value="崇明区">崇明区</option>
+                  <option value="东城区">东城区</option>
+                  <option value="西城区">西城区</option>
+                  <option value="朝阳区">朝阳区</option>
+                  <option value="丰台区">丰台区</option>
+                  <option value="石景山区">石景山区</option>
+                  <option value="海淀区">海淀区</option>
+                  <option value="门头沟区">门头沟区</option>
+                  <option value="房山区">房山区</option>
+                  <option value="通州区">通州区</option>
+                  <option value="顺义区">顺义区</option>
+                  <option value="昌平区">昌平区</option>
+                  <option value="大兴区">大兴区</option>
+                  <option value="怀柔区">怀柔区</option>
+                  <option value="平谷区">平谷区</option>
+                  <option value="密云区">密云区</option>
+                  <option value="延庆区">延庆区</option>
                 </select>
               </label>
               <label>
@@ -427,6 +427,27 @@
             </div>
           </div>
         </section>
+      <!-- ============== Inspector 右侧栏 ============== -->
+      <aside class="inspector" id="inspectorPanel" aria-label="信息面板">
+        <div class="inspector-card">
+          <h3>📊 当前筛选</h3>
+          <div class="inspector-filters" id="inspectorFilters">
+            <p class="inspector-placeholder">加载中…</p>
+          </div>
+        </div>
+        <div class="inspector-card">
+          <h3>🏷️ 热门标签</h3>
+          <div class="inspector-tags" id="inspectorTags"></div>
+        </div>
+        <div class="inspector-card">
+          <h3>⚡ 快速操作</h3>
+          <div class="inspector-actions">
+            <button class="ghost-button" onclick="switchView('publish')" type="button">＋ 发布信息</button>
+            <button class="ghost-button" onclick="switchView('match')" type="button">◎ AI 匹配</button>
+          </div>
+        </div>
+      </aside>
+
       </main>
 
 

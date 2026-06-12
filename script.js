@@ -578,6 +578,7 @@ function renderAll() {
   renderStats();
   renderCustodyOptions();
   renderUserStatusBar();
+  renderInspector();
 }
 
 function renderItemList() {
@@ -599,7 +600,7 @@ function renderItemList() {
   });
   els.itemList.innerHTML = list.length
     ? list.map((r) => renderRecordCard(r)).join("")
-    : `<div class="empty-state">没有找到符合条件的信息。</div>`;
+    : `<div class="empty-state"><strong>没有找到符合条件的信息</strong><p>尝试调整筛选条件或搜索关键词，看看其他物品吧</p></div>`;
   bindCardActions();
   updateHomeStatsFromList(list);
   renderActiveFilters();
@@ -620,6 +621,56 @@ function renderActiveFilters() {
   container.innerHTML = tags.map(t => `
     <span class="active-filter-tag">${escapeHtml(t.text)} <button onclick="clearFilter('${t.type}')">✕</button></span>
   `).join("");
+}
+
+// 渲染 Inspector 右侧栏
+function renderInspector() {
+  const filtersEl = document.getElementById("inspectorFilters");
+  const tagsEl = document.getElementById("inspectorTags");
+  if (!filtersEl || !tagsEl) return;
+
+  // 当前筛选摘要
+  const district = els.filterDistrict?.value || "all";
+  const street = els.filterStreet?.value || "all";
+  const query = els.searchInput?.value?.trim() || "";
+  const filterItems = [];
+  if (district !== "all") filterItems.push({ label: `📍 ${district}`, color: "#0071e3" });
+  if (street !== "all") filterItems.push({ label: `🏘️ ${street}`, color: "#34c759" });
+  if (query) filterItems.push({ label: `🔍 ${query}`, color: "#ff9500" });
+
+  if (filterItems.length === 0) {
+    filtersEl.innerHTML = `<p class="inspector-placeholder">暂无筛选，显示全部信息</p>`;
+  } else {
+    filtersEl.innerHTML = filterItems.map(f => `
+      <div class="inspector-filter-item"><span class="filter-dot" style="background:${f.color}"></span>${escapeHtml(f.label)}</div>
+    `).join("");
+  }
+
+  // 热门标签：从记录中提取高频类别
+  const categoryCounts = {};
+  records.forEach(r => { categoryCounts[r.category] = (categoryCounts[r.category] || 0) + 1; });
+  const topTags = Object.entries(categoryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([cat]) => cat);
+
+  if (topTags.length === 0) {
+    tagsEl.innerHTML = `<p class="inspector-placeholder">暂无数据</p>`;
+  } else {
+    tagsEl.innerHTML = topTags.map(tag => `
+      <span class="inspector-tag" onclick="setCategoryFilter('${escapeHtml(tag)}')">${escapeHtml(tag)}</span>
+    `).join("");
+  }
+}
+
+// 从 Inspector 标签设置类别筛选
+function setCategoryFilter(category) {
+  if (els.categoryFilter) els.categoryFilter.value = category;
+  // 同步 chip 状态
+  document.querySelectorAll(".filter-chip").forEach(chip => {
+    chip.classList.toggle("is-active", chip.dataset.filter === category);
+  });
+  renderItemList();
 }
 
 // 清除单个筛选条件
@@ -668,7 +719,7 @@ function renderRecordCard(record) {
           ${institutionBadge}${custodyBadge}${fuzzyBadge}
         </div>
         <p>${escapeHtml(record.description)}</p>
-        <div class="meta-line">${formatTime(record.time)} · ${escapeHtml(record.status)}${statusLabel ? " · " + statusLabel : ""}</div>
+        <div class="meta-line" style="color:var(--text3);font-size:12px;">${formatTime(record.time)} · ${escapeHtml(record.status)}${statusLabel ? " · " + statusLabel : ""}</div>
         <div class="card-actions">
           <button class="ghost-button" data-detail-id="${record.id}" type="button">详情</button>
           <button class="ghost-button" data-match-id="${record.id}" type="button">匹配</button>
@@ -717,7 +768,7 @@ function renderMatchView() {
   const matches = getMatchesFor(queryRecord).slice(0, 5);
   els.matchResults.innerHTML = matches.length
     ? matches.map((m) => renderMatchItem(m.record, m.result)).join("")
-    : `<div class="empty-state">当前没有相反类型的信息可匹配。</div>`;
+    : `<div class="empty-state"><strong>当前没有可匹配的信息</strong><p>发布一条信息，AI 会为你自动寻找匹配线索</p></div>`;
   els.matchResults.querySelectorAll("[data-detail-id]").forEach((btn) => {
     btn.addEventListener("click", () => openDetail(btn.dataset.detailId));
   });
@@ -1133,7 +1184,7 @@ function renderSemanticBlock(semantic) {
 // ============== 消息中心 ==============
 function renderNotifyList() {
   if (!notifications.length) {
-    els.notifyList.innerHTML = `<div class="empty-state">暂无消息，发布信息后系统会自动推送匹配线索。</div>`;
+    els.notifyList.innerHTML = `<div class="empty-state"><strong>暂无消息</strong><p>发布信息后，系统会自动推送匹配线索和动态通知</p></div>`;
     return;
   }
   els.notifyList.innerHTML = notifications.map((n) => {
@@ -1264,7 +1315,7 @@ function renderProfile() {
   const myRecords = records.filter((r) => r.owner_id === currentUser.sub);
   const myRecordsHtml = myRecords.length
     ? `<div class="my-records-list">${myRecords.map((r) => renderRecordCard(r)).join("")}</div>`
-    : `<div class="empty-state"><p>暂无发布记录</p><button class="primary-action" onclick="switchView('publish')">去发布一条</button></div>`;
+    : `<div class="empty-state"><strong>暂无发布记录</strong><p>你还没有发布过任何信息，去发布第一条吧</p><button class="primary-action" onclick="switchView('publish')" style="margin-top:8px;">去发布一条</button></div>`;
 
   els.profileContent.innerHTML = `
     <div class="profile-card">
