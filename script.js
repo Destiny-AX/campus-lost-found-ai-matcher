@@ -38,33 +38,41 @@ const categoryRelated = {
   学习用品: ["证件", "电子设备"], 钥匙: ["生活用品"], 箱包: ["电子设备"], 贵重物品: ["电子设备"], 其他: [],
 };
 
-// 城市级地点邻接（扩展版）
+// 城市级地点邻接（北京市扩展版）
 const locationGroups = {
-  "南京东路": ["人民广场", "外滩"], "人民广场": ["南京东路", "静安寺"],
-  "静安寺": ["人民广场", "中山公园"], "中山公园": ["静安寺", "徐家汇"],
-  "徐家汇": ["中山公园", "上海南站"], "外滩": ["南京东路", "陆家嘴"],
-  "陆家嘴": ["外滩", "世纪大道"], "世纪大道": ["陆家嘴", "张江"],
-  "张江": ["世纪大道"], "上海南站": ["徐家汇"], "上海火车站": ["人民广场"],
+  // 朝阳区核心商圈
+  "国贸": ["大望路", "建国门"], "大望路": ["国贸", "四惠"],
+  "三里屯": ["工体", "亮马桥"], "工体": ["三里屯", "东直门"],
+  "望京": ["酒仙桥", "大屯"], "酒仙桥": ["望京", "将台"],
+  // 海淀区高校圈
+  "中关村": ["五道口", "知春路"], "五道口": ["中关村", "清华东路"],
+  "西直门": ["积水潭", "大钟寺"],
+  // 交通枢纽
+  "北京南站": ["陶然亭", "马家堡"], "北京西站": ["六里桥", "军事博物馆"],
+  "北京站": ["建国门", "东单"],
+  // 传媒大学周边
+  "中国传媒大学": ["双桥", "管庄", "三间房街道"], "双桥": ["中国传媒大学", "管庄"],
+  "三间房街道": ["中国传媒大学", "管庄", "常营"],
 };
 
-// 区→街道映射（v3 地域结构化）
+// 区→街道映射（北京市 v4 地域结构化）
 const STREET_DATA = {
-  "黄浦区": ["南京东路", "外滩", "人民广场", "淮海中路", "豫园", "新天地", "老西门"],
-  "静安区": ["静安寺", "南京西路", "曹家渡", "石门二路", "江宁路", "北站", "芷江西路"],
-  "徐汇区": ["徐家汇", "衡山路", "漕河泾", "龙华", "长桥", "康健新村", "田林"],
-  "长宁区": ["中山公园", "虹桥", "新华路", "江苏路", "周家桥", "天山路", "仙霞新村"],
-  "普陀区": ["长寿路", "曹杨新村", "长风新村", "宜川路", "甘泉路", "石泉路", "真如"],
-  "虹口区": ["四川北路", "北外滩", "欧阳路", "广中路", "凉城新村", "江湾镇"],
-  "杨浦区": ["五角场", "控江路", "平凉路", "江浦路", "四平路", "长白新村", "殷行"],
-  "浦东新区": ["陆家嘴", "张江", "世纪大道", "金桥", "花木", "洋泾", "周浦", "康桥", "唐镇"],
-  "闵行区": ["莘庄", "七宝", "虹桥镇", "梅陇", "颛桥", "马桥", "吴泾", "浦江"],
-  "宝山区": ["淞宝", "大场", "杨行", "月浦", "罗店", "顾村", "高境", "庙行"],
-  "嘉定区": ["嘉定镇", "南翔", "安亭", "马陆", "江桥", "徐行", "外冈", "菊园新区"],
-  "金山区": ["石化", "朱泾", "枫泾", "亭林", "漕泾", "山阳", "金山卫", "张堰"],
-  "松江区": ["松江新城", "九亭", "泗泾", "佘山", "洞泾", "新桥", "车墩", "叶榭"],
-  "青浦区": ["青浦镇", "徐泾", "华新", "重固", "白鹤", "朱家角", "练塘", "金泽"],
-  "奉贤区": ["南桥", "奉浦", "庄行", "金汇", "青村", "柘林", "四团", "海湾"],
-  "崇明区": ["城桥", "堡镇", "新河", "庙镇", "竖新", "向化", "三星", "港西"],
+  "东城区": ["东华门", "景山", "交道口", "安定门", "北新桥", "东四", "朝阳门", "建国门", "东直门", "和平里", "前门", "崇文门外", "东花市", "龙潭", "体育馆路", "天坛", "永定门外"],
+  "西城区": ["西长安街", "新街口", "德胜门", "什刹海", "大栅栏", "天桥", "椿树", "陶然亭", "广安门内", "牛街", "白纸坊", "广安门外", "展览路", "月坛", "金融街"],
+  "朝阳区": ["建外街道", "朝外街道", "呼家楼", "三里屯", "左家庄", "香河园", "和平街", "安贞", "亚运村", "小关", "酒仙桥", "麦子店", "团结湖", "六里屯", "八里庄", "双井", "劲松", "潘家园", "南磨房", "高碑店", "三间房街道", "中国传媒大学", "管庄", "常营", "平房", "东坝", "金盏", "将台", "太阳宫", "大屯", "望京", "奥运村", "来广营", "崔各庄", "孙河", "东湖"],
+  "丰台区": ["右安门", "太平桥", "西罗园", "大红门", "南苑", "东高地", "东铁匠营", "刘家窑", "方庄", "石榴庄", "玉泉营", "花乡", "看丹", "丰台", "新村", "长辛店", "云岗", "北宫", "王佐"],
+  "石景山区": ["八宝山", "老山", "八角", "古城", "苹果园", "金顶街", "广宁", "五里坨", "鲁谷"],
+  "海淀区": ["万寿路", "永定路", "羊坊店", "甘家口", "八里庄", "紫竹院", "北下关", "北太平庄", "海淀", "中关村", "学院路", "清河", "青龙桥", "西三旗", "马连洼", "花园路", "田村路", "上地", "万柳", "东升", "西北旺", "温泉", "香山", "四季青"],
+  "门头沟区": ["大峪", "城子", "东辛房", "大台", "王平", "永定", "龙泉", "潭柘寺", "军庄", "雁翅", "斋堂", "清水"],
+  "房山区": ["城关", "新镇", "向阳", "东风", "迎风", "星城", "良乡", "拱辰", "西潞", "阎村", "窦店", "石楼", "长阳", "河北", "长沟", "大石窝", "张坊", "十渡", "青龙湖", "韩村河", "霞云岭", "南窖", "佛子庄", "大安山", "史家营", "蒲洼"],
+  "通州区": ["中仓", "新华", "北苑", "玉桥", "潞源", "通运", "宋庄", "张家湾", "漷县", "马驹桥", "西集", "台湖", "永乐店", "潞城", "永顺", "梨园", "于家务"],
+  "顺义区": ["胜利", "光明", "仁和", "后沙峪", "天竺", "杨镇", "牛栏山", "南法信", "马坡", "石园", "空港", "双丰", "高丽营", "李桥", "李遂", "南彩", "北务", "大孙各庄", "张镇", "龙湾屯", "木林", "北小营", "北石槽", "赵全营"],
+  "昌平区": ["城北", "城南", "天通苑北", "天通苑南", "霍营", "回龙观", "龙泽园", "史各庄", "东小口", "沙河", "南口", "马池口", "百善", "小汤山", "崔村", "兴寿", "阳坊", "十三陵", "延寿", "南邵", "北七家"],
+  "大兴区": ["兴丰", "林校路", "清源", "亦庄", "黄村", "旧宫", "西红门", "瀛海", "观音寺", "天宫院", "高米店", "荣华", "博兴", "青云店", "采育", "安定", "礼贤", "榆垡", "庞各庄", "北臧村", "魏善庄", "长子营"],
+  "怀柔区": ["泉河", "龙山", "怀柔", "雁栖", "庙城", "北房", "杨宋", "桥梓", "怀北", "汤河口", "渤海", "九渡河", "琉璃庙", "宝山", "长哨营", "喇叭沟门"],
+  "平谷区": ["滨河", "兴谷", "平谷", "峪口", "马坊", "金海湖", "东高村", "山东庄", "南独乐河", "大华山", "夏各庄", "马昌营", "王辛庄", "大兴庄", "刘家店", "镇罗营", "黄松峪", "熊儿寨"],
+  "密云区": ["鼓楼", "果园", "檀营", "密云", "溪翁庄", "西田各庄", "十里堡", "河南寨", "巨各庄", "穆家峪", "太师屯", "高岭", "不老屯", "冯家峪", "古北口", "大城子", "东邵渠", "北庄", "新城子", "石城"],
+  "延庆区": ["百泉", "香水园", "儒林", "延庆", "康庄", "八达岭", "永宁", "旧县", "张山营", "四海", "千家店", "沈家营", "大榆树", "井庄", "大庄科", "刘斌堡", "香营", "珍珠泉"],
 };
 
 const ITEM_STATUS_LABELS = {
@@ -113,6 +121,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   custodyPoints = await loadCustodyPoints();
   fillDefaultTime();
   renderLocationFilters();
+  // 默认筛选：朝阳区 + 中国传媒大学
+  if (els.filterDistrict) {
+    els.filterDistrict.value = "朝阳区";
+    renderLocationStreets();
+    if (els.filterStreet) {
+      els.filterStreet.value = "中国传媒大学";
+    }
+  }
   renderAll();
   updateNotifyBadge(0);
   startNotifyPoll();
@@ -159,18 +175,31 @@ function bindEvents() {
     btn.addEventListener("click", () => switchView(btn.dataset.viewTarget));
   });
 
-  // 筛选
-  document.querySelectorAll("[data-filter]").forEach((btn) => {
+  // 筛选（顶部 type filter：失物/招领/全部）
+  document.querySelectorAll(".view-switcher [data-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeFilter = btn.dataset.filter;
-      document.querySelectorAll("[data-filter]").forEach((c) => c.classList.remove("is-active"));
+      document.querySelectorAll(".view-switcher [data-filter]").forEach((c) => c.classList.remove("is-active"));
       btn.classList.add("is-active");
       renderItemList();
     });
   });
 
+  // 类别 chip 筛选
+  document.querySelectorAll("#filterChips .filter-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const val = chip.dataset.filter;
+      // 同步到隐藏的 select
+      if (els.categoryFilter) els.categoryFilter.value = val;
+      // 更新 chip 视觉状态
+      document.querySelectorAll("#filterChips .filter-chip").forEach((c) => c.classList.remove("is-active"));
+      chip.classList.add("is-active");
+      renderItemList();
+    });
+  });
+
   on(els.searchInput, "input", renderItemList);
-  on(els.categoryFilter, "change", renderItemList);
+  if (els.categoryFilter) on(els.categoryFilter, "change", renderItemList);
   on(els.filterDistrict, "change", () => { renderLocationStreets(); renderItemList(); });
   on(els.filterStreet, "change", renderItemList);
   on(els.queryRecord, "change", renderMatchView);
@@ -267,15 +296,36 @@ function switchView(view) {
 // ============== 鉴权 ==============
 function restoreAuth() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) return;
+  if (!token) {
+    // 无登录态时自动静默登录演示账号
+    autoLoginDemo();
+    return;
+  }
   try {
     const payload = decodeJwtPayload(token);
-    if (payload.exp && Date.now() / 1000 > payload.exp) { localStorage.removeItem(AUTH_TOKEN_KEY); return; }
+    if (payload.exp && Date.now() / 1000 > payload.exp) { localStorage.removeItem(AUTH_TOKEN_KEY); autoLoginDemo(); return; }
     // 页面刷新恢复登录时，JWT的exp是过期时间戳，不能作为经验值使用
     // 经验值应从用户对象获取，此处先设为0，后续可通过/api/auth?action=me获取完整信息
     currentUser = { ...payload, exp: 0 };
     updateAuthUI();
-  } catch (e) { localStorage.removeItem(AUTH_TOKEN_KEY); }
+  } catch (e) { localStorage.removeItem(AUTH_TOKEN_KEY); autoLoginDemo(); }
+}
+
+// 自动登录演示账号（单用户模式）
+async function autoLoginDemo() {
+  try {
+    const response = await fetch("/api/auth?action=guest-login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: "拾小寻" }),
+    });
+    const payload = await response.json();
+    if (!response.ok) { updateAuthUI(); return; }
+    localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
+    const jwtPayload = decodeJwtPayload(payload.token);
+    currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
+    updateAuthUI();
+    renderAll();
+  } catch (e) { updateAuthUI(); }
 }
 
 function updateAuthUI() {
@@ -287,11 +337,11 @@ function updateAuthUI() {
     els.mobileAuthBtn.textContent = currentUser.nickname || "已登录";
     els.mobileAuthBtn.onclick = () => openUserDialog();
   } else {
-    els.topAuthBtn.textContent = "微信登录";
+    els.topAuthBtn.textContent = "登录";
     els.topAuthBtn.classList.remove("is-logged-in");
-    els.topAuthBtn.onclick = () => els.loginDialog?.showModal();
+    els.topAuthBtn.onclick = () => autoLoginDemo();
     els.mobileAuthBtn.textContent = "登录";
-    els.mobileAuthBtn.onclick = () => els.loginDialog?.showModal();
+    els.mobileAuthBtn.onclick = () => autoLoginDemo();
   }
   els.topVerifyBtn.hidden = !(loggedIn && !currentUser.verified);
 }
@@ -532,7 +582,7 @@ function renderAll() {
 
 function renderItemList() {
   const query = normalizeText(els.searchInput.value);
-  const category = els.categoryFilter.value;
+  const category = els.categoryFilter?.value || "all";
   const district = els.filterDistrict?.value || "all";
   const street = els.filterStreet?.value || "all";
   let list = records.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -541,7 +591,7 @@ function renderItemList() {
     const matchesSearch = !query || haystack.includes(query);
     const matchesCategory = category === "all" || r.category === category;
     const matchesDistrict = district === "all" || r.district === district;
-    const matchesStreet = street === "all" || r.street === street;
+    const matchesStreet = street === "all" || r.street === street || (street === "中国传媒大学" && normalizeText(r.location).includes("传媒大学"));
     const matchesType = activeFilter === "all" || r.type === activeFilter ||
       (activeFilter === "hot" && getBestMatch(r).score >= 75) ||
       (activeFilter === "institution" && r.item_status === "institution");
@@ -551,8 +601,37 @@ function renderItemList() {
     ? list.map((r) => renderRecordCard(r)).join("")
     : `<div class="empty-state">没有找到符合条件的信息。</div>`;
   bindCardActions();
-  // 筛选后更新统计面板（基于当前可见记录）
   updateHomeStatsFromList(list);
+  renderActiveFilters();
+}
+
+// 渲染当前激活的筛选标签
+function renderActiveFilters() {
+  const container = document.getElementById("activeFilters");
+  if (!container) return;
+  const tags = [];
+  const category = els.categoryFilter?.value || "all";
+  const district = els.filterDistrict?.value || "all";
+  const street = els.filterStreet?.value || "all";
+  if (category !== "all") tags.push({ type: "category", label: category, text: `类别：${category}` });
+  if (district !== "all") tags.push({ type: "district", label: district, text: `📍 ${district}` });
+  if (street !== "all") tags.push({ type: "street", label: street, text: `🏘️ ${street}` });
+  if (tags.length === 0) { container.innerHTML = ""; return; }
+  container.innerHTML = tags.map(t => `
+    <span class="active-filter-tag">${escapeHtml(t.text)} <button onclick="clearFilter('${t.type}')">✕</button></span>
+  `).join("");
+}
+
+// 清除单个筛选条件
+function clearFilter(type) {
+  if (type === "category" && els.categoryFilter) els.categoryFilter.value = "all";
+  if (type === "district" && els.filterDistrict) { els.filterDistrict.value = "all"; renderLocationStreets(); }
+  if (type === "street" && els.filterStreet) els.filterStreet.value = "all";
+  // 同步 chip 状态
+  document.querySelectorAll(".filter-chip").forEach(chip => {
+    chip.classList.toggle("is-active", chip.dataset.filter === "all");
+  });
+  renderItemList();
 }
 
 function renderRecordCard(record) {
@@ -676,17 +755,33 @@ function renderMiniRecord(record) {
 
 function renderMatchItem(record, result) {
   const parts = result.breakdown;
+  const score = Math.round(result.score);
+  const scoreColor = score >= 80 ? "#34c759" : score >= 60 ? "#ff9500" : "#0071e3";
+  const ringOffset = 100 - score;
   return `<article class="match-item">
-    <img src="${record.imageData}" alt="${escapeHtml(record.title)}" />
-    <div>
-      <div class="meta-line"><span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span><span class="alert-score">${Math.round(result.score)}%</span></div>
+    <div class="match-item-media">
+      <img src="${record.imageData}" alt="${escapeHtml(record.title)}" />
+      <div class="match-score-ring" style="--score:${score};--ring-color:${scoreColor}">
+        <svg viewBox="0 0 36 36">
+          <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          <path class="ring-fill" stroke-dasharray="${score}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+        </svg>
+        <span class="ring-text">${score}%</span>
+      </div>
+    </div>
+    <div class="match-item-body">
+      <div class="meta-line">
+        <span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span>
+        ${score >= 80 ? '<span class="match-recommend">🔥 强烈推荐</span>' : ''}
+      </div>
       <h4>${escapeHtml(record.title)}</h4>
-      <div class="score-bar"><div class="score-fill" style="width:${Math.round(result.score)}%"></div></div>
-      <div class="score-breakdown">
-        <span>类别 ${Math.round(parts.category)}%</span><span>颜色 ${Math.round(parts.color)}%</span>
-        <span>地点 ${Math.round(parts.location)}%</span><span>时间 ${Math.round(parts.time)}%</span>
-        <span>文本 ${Math.round(parts.text)}%</span><span>图像 ${Math.round(parts.image)}%</span>
-        <span>语义 ${Math.round(parts.semantic)}%</span>
+      <div class="match-dimensions">
+        <div class="match-dimension" style="--dim-width:${parts.category}%;--dim-color:#0071e3"><span class="dim-label">类别</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.category)}%</span></div>
+        <div class="match-dimension" style="--dim-width:${parts.color}%;--dim-color:#af52de"><span class="dim-label">颜色</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.color)}%</span></div>
+        <div class="match-dimension" style="--dim-width:${parts.location}%;--dim-color:#34c759"><span class="dim-label">地点</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.location)}%</span></div>
+        <div class="match-dimension" style="--dim-width:${parts.time}%;--dim-color:#ff9500"><span class="dim-label">时间</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.time)}%</span></div>
+        <div class="match-dimension" style="--dim-width:${parts.text}%;--dim-color:#ff3b30"><span class="dim-label">文本</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.text)}%</span></div>
+        <div class="match-dimension" style="--dim-width:${parts.image}%;--dim-color:#5856d6"><span class="dim-label">图像</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.image)}%</span></div>
       </div>
       <ul class="reason-list">${result.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
       <div class="card-actions">
@@ -2267,13 +2362,30 @@ const MASCOT_TIPS = {
   ],
 };
 
+// 拾小寻 FAQ 数据
+const MASCOT_FAQ = [
+  { q: "拾寻是什么？", a: "拾寻是一个基于 AI 智能匹配的城市失物招领平台，帮助失主和拾主快速精准对接。" },
+  { q: "如何发布失物/招领信息？", a: "点击首页右上角【发布】按钮，填写物品特征、地点、时间等信息，AI 还可以帮你自动提取文字描述哦！" },
+  { q: "AI 匹配是怎么工作的？", a: "系统会从类别、颜色、地点、时间、文本语义等多个维度计算匹配度，给出 0-100% 的匹配分数。" },
+  { q: "如何申请认领物品？", a: "在匹配结果中找到高匹配度的记录，点击【认领申请】，回答发布者设置的问题，等待审核通过即可。" },
+  { q: "信用分是什么？", a: "信用分是拾寻的信誉体系：好评+10分，差评-5分，被举报核实-20分。信用分越高，越容易被信任。" },
+  { q: "实名认证有什么用？", a: "实名认证后信用分提升至 10 分，可以查看完整联系方式，让交易更放心。" },
+  { q: "我的隐私安全吗？", a: "拾寻仅在认领审核通过后向双方展示联系方式，平时信息脱敏展示，保护用户隐私。" },
+  { q: "如何获得徽章？", a: "通过发布信息、帮助匹配、连续活跃等行为可以解锁徽章，比如【初次发布】【匹配达人】【助人为乐】等。" },
+];
+
 let mascotTimer = null;
 let mascotTipIndex = 0;
+let mascotFaqOpen = false;
 
 function initMascot() {
   const avatar = document.getElementById("mascotAvatar");
   const bubble = document.getElementById("mascotBubble");
+  const closeBtn = document.getElementById("mascotClose");
   if (!avatar || !bubble) return;
+
+  // 渲染 FAQ 列表
+  renderMascotFaq();
 
   // 点击头像切换气泡显示/隐藏
   avatar.addEventListener("click", () => {
@@ -2288,6 +2400,16 @@ function initMascot() {
       startMascotRotation();
     }
   });
+
+  // 关闭按钮
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      bubble.classList.remove("is-visible");
+      clearInterval(mascotTimer);
+      mascotTimer = null;
+    });
+  }
 
   // 点击气泡外部自动关闭
   document.addEventListener("click", (e) => {
@@ -2313,10 +2435,28 @@ function initMascot() {
   }, 2500);
 }
 
+function renderMascotFaq() {
+  const list = document.getElementById("mascotFaqList");
+  if (!list) return;
+  list.innerHTML = MASCOT_FAQ.map((item, idx) => `
+    <div class="mascot-faq-item" data-faq-idx="${idx}">
+      <div class="mascot-faq-q">❓ ${escapeHtml(item.q)}</div>
+      <div class="mascot-faq-a">${escapeHtml(item.a)}</div>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".mascot-faq-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const isOpen = el.classList.contains("is-open");
+      list.querySelectorAll(".mascot-faq-item").forEach(i => i.classList.remove("is-open"));
+      if (!isOpen) el.classList.add("is-open");
+    });
+  });
+}
+
 function showMascotTip(text) {
-  const bubble = document.getElementById("mascotBubble");
-  if (!bubble) return;
-  bubble.textContent = text;
+  const tipEl = document.getElementById("mascotTipText");
+  if (tipEl) tipEl.textContent = text;
 }
 
 function refreshMascotTip() {

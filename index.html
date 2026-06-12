@@ -80,8 +80,8 @@
         <section class="view is-active" id="view-home" aria-labelledby="home-heading">
           <div class="section-head">
             <div>
-              <h3 id="home-heading">失物广场 <span class="scope-badge">📍 上海市全域</span></h3>
-              <p>上海市全域失物与招领信息共享平台</p>
+              <h3 id="home-heading">失物广场 <span class="scope-badge">📍 北京市</span></h3>
+            <p>北京市失物与招领信息共享平台 · 聚焦朝阳区</p>
             </div>
             <div class="filter-group" role="group" aria-label="信息筛选">
               <button class="chip is-active" data-filter="all" type="button">全部</button>
@@ -128,23 +128,33 @@
 
           <!-- 用户状态条 -->
           <div class="user-status-bar" id="userStatusBar" style="display:none;"></div>
-          <div class="search-row">
-            <input id="searchInput" type="search" placeholder="搜索物品、地点、颜色或描述" autocomplete="off" />
-            <select id="categoryFilter" aria-label="按类别筛选">
-              <option value="all">全部类别</option>
-              <option value="证件">证件</option>
-              <option value="电子设备">电子设备</option>
-              <option value="生活用品">生活用品</option>
-              <option value="学习用品">学习用品</option>
-              <option value="箱包">箱包</option>
-              <option value="钥匙">钥匙</option>
-              <option value="贵重物品">贵重物品</option>
-              <option value="其他">其他</option>
-            </select>
-          </div>
-          <div class="location-filter-row" id="locationFilterRow">
-            <select id="filterDistrict"><option value="all">全部区</option></select>
-            <select id="filterStreet"><option value="all">全部街道</option></select>
+          <!-- 搜索与筛选 -->
+          <div class="search-box">
+            <div class="search-input-wrap">
+              <span class="search-icon">🔍</span>
+              <input id="searchInput" type="search" placeholder="搜索物品、地点、颜色或描述…" autocomplete="off" />
+            </div>
+            <div class="filter-chips" id="filterChips">
+              <button class="filter-chip is-active" data-filter="all">全部</button>
+              <button class="filter-chip" data-filter="证件">证件</button>
+              <button class="filter-chip" data-filter="电子设备">电子设备</button>
+              <button class="filter-chip" data-filter="生活用品">生活用品</button>
+              <button class="filter-chip" data-filter="学习用品">学习用品</button>
+              <button class="filter-chip" data-filter="箱包">箱包</button>
+              <button class="filter-chip" data-filter="钥匙">钥匙</button>
+              <button class="filter-chip" data-filter="贵重物品">贵重物品</button>
+            </div>
+            <div class="location-filter-row" id="locationFilterRow">
+              <div class="location-select-wrap">
+                <span class="location-icon">📍</span>
+                <select id="filterDistrict"><option value="all">北京市 - 全部区</option></select>
+              </div>
+              <div class="location-select-wrap">
+                <span class="location-icon">🏘️</span>
+                <select id="filterStreet"><option value="all">全部街道</option></select>
+              </div>
+            </div>
+            <div class="active-filters" id="activeFilters"></div>
           </div>
           <div class="card-grid" id="itemList"></div>
         </section>
@@ -545,7 +555,19 @@
 
     <!-- 互动角色：拾小寻 -->
     <div class="mascot-host" id="mascotHost">
-      <div class="mascot-bubble" id="mascotBubble">你好！我是拾小寻，有什么可以帮你的吗？</div>
+      <div class="mascot-bubble" id="mascotBubble">
+        <div class="mascot-bubble-header">
+          <span>🐱 拾小寻</span>
+          <button class="mascot-close" id="mascotClose">✕</button>
+        </div>
+        <div class="mascot-bubble-body" id="mascotBubbleBody">
+          <p class="mascot-tip" id="mascotTipText">你好！我是拾小寻，有什么可以帮你的吗？</p>
+          <div class="mascot-faq" id="mascotFaq">
+            <div class="mascot-faq-title">📚 常见问题</div>
+            <div class="mascot-faq-list" id="mascotFaqList"></div>
+          </div>
+        </div>
+      </div>
       <div class="mascot-avatar" id="mascotAvatar">🐱</div>
     </div>
 
