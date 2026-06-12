@@ -124,9 +124,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 默认筛选：朝阳区 + 中国传媒大学
   if (els.filterDistrict) {
     els.filterDistrict.value = "朝阳区";
+    if (els.filterDistrictInput) els.filterDistrictInput.value = "朝阳区";
     renderLocationStreets();
     if (els.filterStreet) {
       els.filterStreet.value = "中国传媒大学";
+      if (els.filterStreetInput) els.filterStreetInput.value = "中国传媒大学";
     }
   }
   renderAll();
@@ -158,6 +160,9 @@ function cacheElements() {
     "notifyList", "markAllReadBtn", "notifyBadge", "notifyBadgeMobile",
     "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
     "filterDistrict", "filterStreet",
+    "filterDistrictInput", "filterDistrictList",
+    "filterStreetInput", "filterStreetList",
+    "queryRecordInput", "queryRecordList",
   ];
   ids.forEach((id) => { els[toCamel(id)] = document.querySelector(`#${id}`); });
   els.submitButton = els.publishForm?.querySelector(".submit-button");
@@ -203,6 +208,35 @@ function bindEvents() {
   on(els.filterDistrict, "change", () => { renderLocationStreets(); renderItemList(); });
   on(els.filterStreet, "change", renderItemList);
   on(els.queryRecord, "change", renderMatchView);
+
+  // 初始化可搜索下拉组件
+  initSearchSelect({
+    input: els.filterDistrictInput,
+    list: els.filterDistrictList,
+    select: els.filterDistrict,
+    options: () => Object.keys(STREET_DATA),
+    placeholder: "北京市 - 全部区",
+    onSelect: () => { renderLocationStreets(); renderItemList(); },
+  });
+  initSearchSelect({
+    input: els.filterStreetInput,
+    list: els.filterStreetList,
+    select: els.filterStreet,
+    options: () => {
+      const district = els.filterDistrict?.value;
+      return district && district !== "all" ? STREET_DATA[district] || [] : [];
+    },
+    placeholder: "全部街道",
+    onSelect: renderItemList,
+  });
+  initSearchSelect({
+    input: els.queryRecordInput,
+    list: els.queryRecordList,
+    select: els.queryRecord,
+    options: () => records.map((r) => ({ value: r.id, label: `${r.type === "lost" ? "寻物" : "招领"}｜${r.title}` })),
+    placeholder: "选择待匹配信息...",
+    onSelect: renderMatchView,
+  });
   on(els.imageInput, "change", handleImageUpload);
   bindDropUpload();
   on(els.publishForm, "submit", handlePublish);
@@ -924,12 +958,19 @@ function renderLocationStreets() {
   if (district === "all") {
     streetSelect.innerHTML = '<option value="all">全部街道</option>';
     streetSelect.disabled = true;
+    if (els.filterStreetInput) {
+      els.filterStreetInput.value = "";
+      els.filterStreetInput.placeholder = "全部街道";
+    }
     return;
   }
   const streets = STREET_DATA[district] || [];
   streetSelect.innerHTML = '<option value="all">全部街道</option>' +
     streets.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
   streetSelect.disabled = false;
+  if (els.filterStreetInput) {
+    els.filterStreetInput.placeholder = "搜索或选择街道...";
+  }
 }
 
 function bindLocationCascade() {
@@ -2492,6 +2533,72 @@ function renderMascotFaq() {
       list.querySelectorAll(".mascot-faq-item").forEach(i => i.classList.remove("is-open"));
       if (!isOpen) el.classList.add("is-open");
     });
+  });
+}
+
+// 可搜索下拉组件初始化
+function initSearchSelect({ input, list, select, options, placeholder, onSelect }) {
+  if (!input || !list || !select) return;
+
+  function getOpts() {
+    const raw = typeof options === "function" ? options() : options;
+    return raw.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  }
+
+  function renderDropdown(filter = "") {
+    const opts = getOpts();
+    const term = normalizeText(filter);
+    const filtered = term
+      ? opts.filter((o) => normalizeText(o.label).includes(term))
+      : opts;
+    if (!filtered.length) {
+      list.innerHTML = `<li class="search-select-empty">无匹配结果</li>`;
+    } else {
+      list.innerHTML = filtered
+        .map(
+          (o) =>
+            `<li class="search-select-option" data-value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</li>`
+        )
+        .join("");
+    }
+    list.hidden = false;
+  }
+
+  input.addEventListener("focus", () => renderDropdown(input.value));
+  input.addEventListener("input", () => renderDropdown(input.value));
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const first = list.querySelector(".search-select-option");
+      if (first) first.click();
+    } else if (e.key === "Escape") {
+      list.hidden = true;
+    }
+  });
+
+  list.addEventListener("click", (e) => {
+    const option = e.target.closest(".search-select-option");
+    if (!option) return;
+    const val = option.dataset.value;
+    select.value = val;
+    input.value = option.textContent;
+    list.hidden = true;
+    onSelect?.();
+  });
+
+  // 点击外部关闭
+  document.addEventListener("click", (e) => {
+    if (!input.contains(e.target) && !list.contains(e.target)) {
+      list.hidden = true;
+    }
+  });
+
+  // 同步 select 变化到 input（如外部代码修改 select）
+  select.addEventListener("change", () => {
+    const opts = getOpts();
+    const found = opts.find((o) => o.value === select.value);
+    input.value = found ? found.label : select.value === "all" ? "" : select.value;
   });
 }
 

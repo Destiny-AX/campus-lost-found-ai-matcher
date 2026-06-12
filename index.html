@@ -145,13 +145,17 @@
               <button class="filter-chip" data-filter="贵重物品">贵重物品</button>
             </div>
             <div class="location-filter-row" id="locationFilterRow">
-              <div class="location-select-wrap">
+              <div class="location-select-wrap search-select-wrap">
                 <span class="location-icon">📍</span>
-                <select id="filterDistrict"><option value="all">北京市 - 全部区</option></select>
+                <input type="text" id="filterDistrictInput" class="search-select-input" placeholder="搜索或选择区..." autocomplete="off" />
+                <select id="filterDistrict" class="search-select-native"><option value="all">北京市 - 全部区</option></select>
+                <ul id="filterDistrictList" class="search-select-dropdown" hidden></ul>
               </div>
-              <div class="location-select-wrap">
+              <div class="location-select-wrap search-select-wrap">
                 <span class="location-icon">🏘️</span>
-                <select id="filterStreet"><option value="all">全部街道</option></select>
+                <input type="text" id="filterStreetInput" class="search-select-input" placeholder="搜索或选择街道..." autocomplete="off" />
+                <select id="filterStreet" class="search-select-native"><option value="all">全部街道</option></select>
+                <ul id="filterStreetList" class="search-select-dropdown" hidden></ul>
               </div>
             </div>
             <div class="active-filters" id="activeFilters"></div>
@@ -354,7 +358,11 @@
           <div class="match-layout">
             <div class="match-control">
               <label for="queryRecord">待匹配信息</label>
-              <select id="queryRecord"></select>
+              <div class="search-select-wrap match-select-wrap">
+                <input type="text" id="queryRecordInput" class="search-select-input" placeholder="搜索或选择记录..." autocomplete="off" />
+                <select id="queryRecord" class="search-select-native"></select>
+                <ul id="queryRecordList" class="search-select-dropdown" hidden></ul>
+              </div>
               <div class="selected-card" id="selectedRecord"></div>
               <div class="score-note">
                 <strong>权重</strong>

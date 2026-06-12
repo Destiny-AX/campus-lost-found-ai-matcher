@@ -1178,6 +1178,7 @@ body {
   transform: translateY(-50%);
   font-size: 14px;
   pointer-events: none;
+  z-index: 2;
 }
 .location-select-wrap select {
   width: 100%;
@@ -1196,6 +1197,73 @@ body {
 .location-select-wrap select:focus {
   outline: none;
   border-color: var(--blue);
+}
+
+/* 可搜索下拉组件 */
+.search-select-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
+}
+.search-select-wrap .location-icon {
+  z-index: 2;
+}
+.search-select-input {
+  width: 100%;
+  padding: 10px 12px 10px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  cursor: text;
+}
+.search-select-input:focus {
+  border-color: var(--blue);
+}
+.search-select-native {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+.search-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+}
+.search-select-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.search-select-option:hover,
+.search-select-option.is-highlighted {
+  background: var(--surface-2);
+}
+.search-select-empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text2);
+  text-align: center;
+}
+.match-select-wrap {
+  margin-bottom: 12px;
 }
 
 .active-filters {
