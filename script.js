@@ -154,7 +154,7 @@ function cacheElements() {
     "verifyDialog", "verifyForm", "closeVerifyBtn",
     "pickupDialog", "pickupForm", "closePickupBtn",
     "aiInput", "aiExtractBtn", "aiExtractHint",
-    "itemStatusGroup", "custodyPicker", "custodyPointSelect",
+    "itemStatusGroup", "custodyPicker", "custodyPointSelect", "claimQuestionGroup",
     "notifyList", "markAllReadBtn", "notifyBadge", "notifyBadgeMobile",
     "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
     "filterDistrict", "filterStreet",
@@ -241,6 +241,7 @@ function bindEvents() {
     radio.addEventListener("change", () => {
       const isFound = radio.value === "found";
       if (els.itemStatusGroup) els.itemStatusGroup.hidden = !isFound;
+      if (els.claimQuestionGroup) els.claimQuestionGroup.hidden = !isFound;
     });
   });
   els.publishForm?.querySelectorAll('input[name="item_status"]').forEach((radio) => {
@@ -2472,18 +2473,7 @@ function initMascot() {
     }
   });
 
-  // 初始延迟显示欢迎语
-  setTimeout(() => {
-    if (!currentUser) {
-      showMascotTip(MASCOT_TIPS.guest[0]);
-    } else if (!currentUser.verified) {
-      showMascotTip(MASCOT_TIPS.unverified[0]);
-    } else {
-      showMascotTip(MASCOT_TIPS.home[0]);
-    }
-    bubble.classList.add("is-visible");
-    startMascotRotation();
-  }, 2500);
+  // 不再自动弹出气泡，仅保留头像可见，由用户主动点击展开
 }
 
 function renderMascotFaq() {

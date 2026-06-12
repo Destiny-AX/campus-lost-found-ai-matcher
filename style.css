@@ -1295,7 +1295,7 @@ body {
   .card-grid { grid-template-columns: 1fr; gap: 12px; }
   .card { padding: 0; }
   .card:hover { transform: none; box-shadow: var(--shadow); border-color: var(--border); }
-  .card:active { transform: scale(0.98); }
+  .card:active { transform: scale(0.96); background: var(--surface-2); }
 
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .algorithm-grid { grid-template-columns: 1fr; }
@@ -1307,7 +1307,7 @@ body {
 
   .search-row { flex-direction: column; }
 
-  /* filter-chips 横向滑动 */
+  /* filter-chips 横向滑动 + 右侧渐变指示 */
   .filter-chips {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1315,17 +1315,20 @@ body {
     padding-bottom: 4px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    position: relative;
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
   }
   .filter-chips::-webkit-scrollbar { display: none; }
 
   /* 弹窗底部滑出 */
-  .detail-dialog, .login-dialog {
+  .detail-dialog, .login-dialog, #publishDialog {
     width: 100%; max-width: 100%;
     margin: 0; border-radius: var(--radius) var(--radius) 0 0;
     position: fixed; bottom: 0; left: 0; right: 0;
-    max-height: 85vh;
+    max-height: 85vh; overflow-y: auto;
   }
-  .detail-dialog[open], .login-dialog[open] {
+  .detail-dialog[open], .login-dialog[open], #publishDialog[open] {
     animation: dialogSlideUp 0.3s var(--ease-out);
   }
   @keyframes dialogSlideUp {
@@ -1333,9 +1336,51 @@ body {
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* 发布表单移动端优化 */
+  .publish-form { padding: 16px; }
+  .publish-form .form-row.segmented label {
+    min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .publish-form input,
+  .publish-form select,
+  .publish-form textarea {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .publish-form textarea { min-height: 80px; }
+  .publish-form label { font-size: 14px; margin-bottom: 12px; }
+  .publish-form .wide-label { margin-bottom: 14px; }
+  .publish-form small { font-size: 11px; }
+  .upload-zone { gap: 12px; }
+  .upload-card { min-height: 120px; }
+
+  /* 底部导航优化 */
+  .bottom-tabs .tab-item {
+    padding: 6px 0 8px;
+    gap: 3px;
+    font-size: 11px;
+    transition: color 0.2s, background 0.2s;
+  }
+  .bottom-tabs .tab-item.is-active {
+    color: var(--blue);
+    background: rgba(0,113,227,0.08);
+    border-radius: 8px;
+    margin: 0 4px;
+  }
+  .bottom-tabs .tab-item.is-active::before {
+    width: 24px; height: 3px; border-radius: 0 0 3px 3px;
+  }
+
   /* 触摸反馈 */
   button, .card, .chip, .filter-chip, .nav-item, .tab-item {
     -webkit-tap-highlight-color: transparent;
+  }
+  button { min-height: 36px; }
+  .primary-action, .ghost-button, .danger-button {
+    min-height: 44px;
+    padding: 10px 16px;
   }
 }
 

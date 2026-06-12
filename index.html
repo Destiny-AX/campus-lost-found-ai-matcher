@@ -309,11 +309,13 @@
               详细描述
               <textarea name="description" rows="3" required placeholder="补充品牌、外观、特殊标记、可能遗失位置等"></textarea>
             </label>
-            <label class="wide-label">
-              认领验证问题（选填）
-              <input name="claim_question" placeholder="例如：包里除了电脑还有什么？" />
-              <small style="color:var(--text2);font-size:12px;">设置问题后，失主需要回答正确才能申请联系你，防止冒领</small>
-            </label>
+            <div class="claim-question-group" id="claimQuestionGroup" hidden>
+              <label class="wide-label">
+                认领验证问题（选填）
+                <input name="claim_question" placeholder="例如：包里除了电脑还有什么？" />
+                <small style="color:var(--text2);font-size:12px;">设置问题后，失主需要回答正确才能申请联系你，防止冒领</small>
+              </label>
+            </div>
 
             <!-- 代保管点选择器（item_status=custody 时显示） -->
             <div class="custody-picker" id="custodyPicker" hidden>
