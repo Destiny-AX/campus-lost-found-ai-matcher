@@ -126,8 +126,8 @@ body {
 .view { display: none; }
 .view.is-active { display: block; }
 
-.section-head { margin-bottom: 24px; }
-.section-head h3 { font-size: 22px; font-weight: 700; }
+.section-head { margin-bottom: 28px; }
+.section-head h3 { font-size: 22px; font-weight: 700; margin-bottom: 14px; }
 .section-head p { font-size: 14px; color: var(--text2); margin-top: 4px; }
 
 /* ===== 筛选栏 — 更紧凑的横向布局 ===== */
