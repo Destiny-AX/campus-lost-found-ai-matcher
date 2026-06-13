@@ -20,6 +20,7 @@
     { "src": "/api/notify", "dest": "/api/notify.js" },
     { "src": "/api/custody", "dest": "/api/custody.js" },
     { "src": "/api/upload-image", "dest": "/api/upload-image.js" },
+    { "src": "/images/(.*)", "dest": "/images/$1" },
     { "src": "/style.css", "dest": "/style.css" },
     { "src": "/script.js", "dest": "/script.js" },
     { "src": "/", "dest": "/index.html" },
