@@ -1300,6 +1300,7 @@ const handler = async function handler(req, res) {
     }
 
     if (action === "diag") return await handleDiag(req, res);
+    if (action === "sync-status") return await handleSyncStatus(req, res);
     if (action === "claim-request") return await handleClaimRequest(req, res);
     if (action === "review-claim") return await handleReviewClaim(req, res);
     if (action === "submit-review") return await handleSubmitReview(req, res);
@@ -1321,34 +1322,136 @@ async function handleList(req, res) {
   const current = getCurrentUser(req);
   const config = getSupabaseConfig();
 
-  // 初始化示例种子数据（仅当内存为空时）
-  // 使用resetSeedRecords()可强制清除历史残留数据，确保只显示纯净示例
-  initSeedRecords();
-
-  // 始终合并内存中的记录，确保 fallback 写入的记录也能被读到
-  const memoryRows = Array.from(memoryRecords.values()).map((row) => fromMemoryRow(row, current));
-
   if (!config) {
-    sendJson(res, 200, { records: memoryRows });
+    sendJson(res, 503, { error: "数据库服务未配置，请联系管理员" });
     return;
   }
 
   try {
+    // 自动同步示例种子数据到数据库（upsert 方式，幂等）
+    const syncResult = await syncSeedRecordsToSupabase(config);
+    console.log(`[LIST] Sync result: ${JSON.stringify(syncResult)}`);
+
     const response = await supabaseFetch(config, `/rest/v1/${TABLE}?select=*&order=created_at.desc`, { method: "GET" });
     const text = await response.text();
     if (!response.ok) {
-      sendJson(res, 200, { records: memoryRows, fallback: true });
+      console.log(`[LIST] Supabase query failed: ${response.status} ${text.substring(0, 200)}`);
+      sendJson(res, 503, { error: "数据库服务暂时不可用，请稍后再试" });
       return;
     }
     const rows = JSON.parse(text || "[]");
+    console.log(`[LIST] Fetched ${rows.length} rows from Supabase`);
     const supabaseRecords = rows.map((row) => fromSupabaseRow(row, current)).filter(Boolean);
-    // 合并 Supabase 和内存记录，以 Supabase 为准，内存中的新记录补充进去
-    const supabaseIds = new Set(supabaseRecords.map((r) => r.id));
-    const merged = [...supabaseRecords, ...memoryRows.filter((r) => r.id && !supabaseIds.has(r.id))];
-    sendJson(res, 200, { records: merged });
+    console.log(`[LIST] Returning ${supabaseRecords.length} records`);
+    sendJson(res, 200, { records: supabaseRecords });
   } catch (error) {
-    sendJson(res, 200, { records: memoryRows, fallback: true });
+    console.log(`[LIST] Error: ${error.message}`);
+    sendJson(res, 503, { error: "数据库服务异常，请稍后再试" });
   }
+}
+
+// 检查同步状态（调试用）
+async function handleSyncStatus(req, res) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    sendJson(res, 503, { error: "数据库未配置" });
+    return;
+  }
+  try {
+    // 查询数据库中 demo- 前缀记录数（用 eq. 精确查询第一条）
+    const demoResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.demo-lost-01&select=id`, { method: "GET" });
+    const demoText = await demoResp.text();
+    const demoRows = JSON.parse(demoText || "[]");
+    // 查询总记录数
+    const allResp = await supabaseFetch(config, `/rest/v1/${TABLE}?select=id`, { method: "GET" });
+    const allText = await allResp.text();
+    const allRows = JSON.parse(allText || "[]");
+    sendJson(res, 200, {
+      seedCount: SEED_RECORDS.length,
+      demoInDb: demoRows.length,
+      totalInDb: allRows.length,
+      demoIds: demoRows.map((r) => r.id).slice(0, 5),
+    });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message });
+  }
+}
+
+// 将示例种子数据同步到 Supabase（仅在数据库为空时调用）
+async function syncSeedRecordsToSupabase(config) {
+  let successCount = 0;
+  let failCount = 0;
+  const errors = [];
+  try {
+    for (const record of SEED_RECORDS) {
+      const row = {
+        id: record.id,
+        type: record.type,
+        title: record.title,
+        category: record.category,
+        color: record.color,
+        location: record.location,
+        event_time: record.event_time,
+        contact: record.contact,
+        description: record.description,
+        status: record.status,
+        item_status: record.item_status || "unknown",
+        custody_point_id: record.custody_point_id || "",
+        pickup_code: record.pickup_code || "",
+        owner_id: record.owner_id || "",
+        image_data: record.image_data || "",
+        image_feature: record.image_feature,
+        semantic: record.semantic,
+        visual_seed: record.visualSeed || null,
+        created_at: record.created_at,
+        city: record.city || "上海市",
+        district: record.district || "",
+        street: record.street || "",
+        detail_location: record.detail_location || "",
+        claim_question: record.claim_question || "",
+      };
+      // 先查询是否已存在
+      const checkResp = await supabaseFetch(
+        config,
+        `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id&limit=1`,
+        { method: "GET" }
+      );
+      if (checkResp.ok) {
+        const existing = await checkResp.json();
+        if (existing.length > 0) {
+          successCount++; // 已存在，算成功
+          continue;
+        }
+      }
+      // 不存在则插入
+      const postResp = await supabaseFetch(config, `/rest/v1/${TABLE}`, {
+        method: "POST",
+        headers: {
+          Prefer: "return=representation",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(row),
+      });
+      if (postResp.ok) {
+        successCount++;
+      } else {
+        // 读取错误信息
+        const errText = await postResp.text().catch(() => "");
+        // 如果是主键冲突（23505）算成功
+        if (errText.includes("23505") || errText.includes("unique constraint")) {
+          successCount++;
+        } else {
+          failCount++;
+          errors.push({ id: record.id, error: errText.substring(0, 200) });
+        }
+      }
+    }
+  } catch (error) {
+    errors.push({ id: "global", error: error.message });
+  }
+  // 输出同步日志到控制台（Vercel日志中可见）
+  console.log(`[SYNC] Seed sync complete: ${successCount}/${SEED_RECORDS.length} success, ${failCount} failed. Errors: ${JSON.stringify(errors.slice(0, 3))}`);
+  return { successCount, failCount, errors };
 }
 
 async function handleCreate(req, res) {
@@ -1361,8 +1464,7 @@ async function handleCreate(req, res) {
   const record = normalizeRecord(body.record || body, current);
   const config = getSupabaseConfig();
   if (!config) {
-    memoryRecords.set(record.id, toMemoryRow(record));
-    sendJson(res, 200, { record });
+    sendJson(res, 503, { error: "数据库服务未配置，请联系管理员" });
     return;
   }
   try {
@@ -1373,15 +1475,13 @@ async function handleCreate(req, res) {
     });
     const text = await response.text();
     if (!response.ok) {
-      memoryRecords.set(record.id, toMemoryRow(record));
-      sendJson(res, 200, { record, fallback: true });
+      sendJson(res, 503, { error: "数据保存失败，请稍后再试" });
       return;
     }
     const rows = JSON.parse(text || "[]");
     sendJson(res, 200, { record: fromSupabaseRow(rows[0], current) });
   } catch (error) {
-    memoryRecords.set(record.id, toMemoryRow(record));
-    sendJson(res, 200, { record, fallback: true });
+    sendJson(res, 503, { error: "数据保存异常，请稍后再试" });
   }
 }
 

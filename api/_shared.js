@@ -24,13 +24,15 @@ function readEnv(name) {
 
 // 统一获取 Supabase 配置
 function getSupabaseConfig() {
-  const url = (
+  // 去除 BOM 字符和前后空白
+  const clean = (str) => (str || "").replace(/^\uFEFF/, "").trim();
+  const url = clean(
     readEnv("LOST_FOUND_SUPABASE_URL") ||
     readEnv("SUPABASE_URL") ||
     readEnv("supabase_url") ||
     ""
   ).replace(/\/$/, "");
-  const key =
+  const key = clean(
     readEnv("LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY") ||
     readEnv("SUPABASE_SERVICE_ROLE_KEY") ||
     readEnv("supabase_service_role_key") ||
@@ -38,7 +40,8 @@ function getSupabaseConfig() {
     readEnv("supabase_key") ||
     readEnv("SUPABASE_ANON_KEY") ||
     readEnv("supabase_anon_key") ||
-    "";
+    ""
+  );
   if (!url || !key) return null;
   return { url, key };
 }

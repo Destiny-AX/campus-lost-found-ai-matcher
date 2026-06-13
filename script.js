@@ -1934,7 +1934,16 @@ function isToday(value) {
   return now.getFullYear() === d.getFullYear() && now.getMonth() === d.getMonth() && now.getDate() === d.getDate();
 }
 
-function escapeHtml(value) { const div = document.createElement("div"); div.textContent = String(value ?? ""); return div.innerHTML; }
+function escapeHtml(value) {
+  const str = String(value ?? "");
+  // 只转义 HTML 特殊字符，保留 Emoji 和其他 Unicode 字符
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 function rgbToHex([r, g, b]) { return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`; }
 
