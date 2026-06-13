@@ -121,14 +121,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   custodyPoints = await loadCustodyPoints();
   fillDefaultTime();
   renderLocationFilters();
-  // 默认筛选：朝阳区 + 中国传媒大学
-  if (els.filterDistrict) {
-    els.filterDistrict.value = "朝阳区";
-    if (els.filterDistrictInput) els.filterDistrictInput.value = "朝阳区";
+  // 默认不设置固定筛选条件，显示全部记录
+  // 如需示例筛选，可通过URL参数或localStorage恢复用户上次的选择
+  const savedDistrict = localStorage.getItem('lastDistrict');
+  const savedStreet = localStorage.getItem('lastStreet');
+  if (els.filterDistrict && savedDistrict) {
+    els.filterDistrict.value = savedDistrict;
+    if (els.filterDistrictInput) els.filterDistrictInput.value = savedDistrict;
     renderLocationStreets();
-    if (els.filterStreet) {
-      els.filterStreet.value = "中国传媒大学";
-      if (els.filterStreetInput) els.filterStreetInput.value = "中国传媒大学";
+    if (els.filterStreet && savedStreet) {
+      els.filterStreet.value = savedStreet;
+      if (els.filterStreetInput) els.filterStreetInput.value = savedStreet;
     }
   }
   renderAll();
@@ -205,8 +208,15 @@ function bindEvents() {
 
   on(els.searchInput, "input", renderItemList);
   if (els.categoryFilter) on(els.categoryFilter, "change", renderItemList);
-  on(els.filterDistrict, "change", () => { renderLocationStreets(); renderItemList(); });
-  on(els.filterStreet, "change", renderItemList);
+  on(els.filterDistrict, "change", () => {
+    localStorage.setItem('lastDistrict', els.filterDistrict.value);
+    renderLocationStreets();
+    renderItemList();
+  });
+  on(els.filterStreet, "change", () => {
+    localStorage.setItem('lastStreet', els.filterStreet.value);
+    renderItemList();
+  });
   on(els.queryRecord, "change", renderMatchView);
 
   // 初始化可搜索下拉组件

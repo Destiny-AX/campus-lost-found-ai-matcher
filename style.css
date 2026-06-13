@@ -1515,6 +1515,37 @@ body {
   .info-banner-text {
     font-size: 12px;
   }
+
+  /* 移动端搜索框和下拉框优化 */
+  .search-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .search-select-wrap,
+  .location-select-wrap {
+    min-width: 100%;
+    width: 100%;
+  }
+  .search-select-input,
+  .location-select-wrap select {
+    background: var(--bg) !important;
+    font-size: 16px; /* 防止iOS缩放 */
+    min-height: 44px;
+  }
+  .search-select-dropdown {
+    background: var(--card) !important;
+    z-index: 1000; /* 确保下拉框在最上层 */
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    max-height: 200px;
+  }
+  .search-select-option {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+  .location-filter-row {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
 
 /* ============== 认证状态样式 ============== */
