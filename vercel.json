@@ -1,5 +1,17 @@
 {
   "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "style.css", "use": "@vercel/static" },
+    { "src": "script.js", "use": "@vercel/static" },
+    { "src": "api/analyze-image.js", "use": "@vercel/node" },
+    { "src": "api/records.js", "use": "@vercel/node" },
+    { "src": "api/auth.js", "use": "@vercel/node" },
+    { "src": "api/structured-input.js", "use": "@vercel/node" },
+    { "src": "api/notify.js", "use": "@vercel/node" },
+    { "src": "api/custody.js", "use": "@vercel/node" },
+    { "src": "api/upload-image.js", "use": "@vercel/node" }
+  ],
   "routes": [
     { "src": "/api/analyze-image", "dest": "/api/analyze-image.js" },
     { "src": "/api/records", "dest": "/api/records.js" },
