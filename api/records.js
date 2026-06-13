@@ -42,7 +42,7 @@ const SEED_RECORDS = [
     street: "南京西路",
     detail_location: "地铁站2号口安检处",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/airpods1/400/300",
+    image_data: "/images/耳机.png",
     image_feature: null,
     semantic: {
       object_name: "AirPods Pro充电盒",
@@ -73,7 +73,7 @@ const SEED_RECORDS = [
     street: "南京西路",
     detail_location: "地铁站2号口",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/airpods2/400/300",
+    image_data: "/images/耳机.png",
     image_feature: null,
     semantic: {
       object_name: "无线耳机充电盒",
@@ -104,7 +104,7 @@ const SEED_RECORDS = [
     street: "人民广场",
     detail_location: "1号线转2号线换乘通道",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/card1/400/300",
+    image_data: "/images/卡.png",
     image_feature: null,
     semantic: {
       object_name: "学生校园卡",
@@ -135,7 +135,7 @@ const SEED_RECORDS = [
     street: "人民广场",
     detail_location: "地铁站服务中心",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/card2/400/300",
+    image_data: "/images/卡.png",
     image_feature: null,
     semantic: {
       object_name: "蓝色校园卡",
@@ -166,7 +166,7 @@ const SEED_RECORDS = [
     street: "徐家汇",
     detail_location: "美罗城B1层美食区",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/key1/400/300",
+    image_data: "/images/钥匙.png",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -197,7 +197,7 @@ const SEED_RECORDS = [
     street: "徐家汇",
     detail_location: "美罗城服务台",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/key2/400/300",
+    image_data: "/images/钥匙.png",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -228,7 +228,7 @@ const SEED_RECORDS = [
     street: "陆家嘴",
     detail_location: "地铁站3号口出站闸机旁",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/umbrella1/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "红色折叠伞",
@@ -259,7 +259,7 @@ const SEED_RECORDS = [
     street: "陆家嘴",
     detail_location: "3号口出站闸机旁",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/umbrella2/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "红色波点折叠伞",
@@ -291,7 +291,7 @@ const SEED_RECORDS = [
     street: "虹桥",
     detail_location: "候车厅A12检票口附近",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/bag1/400/300",
+    image_data: "/images/包.png",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -322,7 +322,7 @@ const SEED_RECORDS = [
     street: "虹桥",
     detail_location: "火车站失物招领处",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/bag2/400/300",
+    image_data: "/images/包.png",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -353,7 +353,7 @@ const SEED_RECORDS = [
     street: "外滩",
     detail_location: "观景台北侧栏杆处",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/jewelry1/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "金色手链",
@@ -384,7 +384,7 @@ const SEED_RECORDS = [
     street: "外滩",
     detail_location: "观景台北侧",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/jewelry2/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "金色手链",
@@ -415,7 +415,7 @@ const SEED_RECORDS = [
     street: "五角场",
     detail_location: "万达广场三楼餐饮区",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/cup1/400/300",
+    image_data: "/images/杯.png",
     image_feature: null,
     semantic: {
       object_name: "透明玻璃水杯",
@@ -446,7 +446,7 @@ const SEED_RECORDS = [
     street: "五角场",
     detail_location: "万达广场服务台",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/cup2/400/300",
+    image_data: "/images/杯.png",
     image_feature: null,
     semantic: {
       object_name: "星巴克玻璃杯",
@@ -477,7 +477,7 @@ const SEED_RECORDS = [
     street: "张江",
     detail_location: "地铁站站台座椅",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/tablet1/400/300",
+    image_data: "/images/键盘.png",
     image_feature: null,
     semantic: {
       object_name: "iPad Pro",
@@ -508,7 +508,7 @@ const SEED_RECORDS = [
     street: "张江",
     detail_location: "地铁站服务中心",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/tablet2/400/300",
+    image_data: "/images/键盘.png",
     image_feature: null,
     semantic: {
       object_name: "银色平板电脑",
@@ -539,7 +539,7 @@ const SEED_RECORDS = [
     street: "七宝",
     detail_location: "古镇老街中段",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/scarf1/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "粉色毛绒围巾",
@@ -570,7 +570,7 @@ const SEED_RECORDS = [
     street: "七宝",
     detail_location: "游客中心失物招领处",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/scarf2/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "粉色围巾",
@@ -601,7 +601,7 @@ const SEED_RECORDS = [
     street: "嘉定镇",
     detail_location: "地铁站洗手间",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/watch1/400/300",
+    image_data: "/images/手环.png",
     image_feature: null,
     semantic: {
       object_name: "灰色运动手环",
@@ -632,7 +632,7 @@ const SEED_RECORDS = [
     street: "嘉定镇",
     detail_location: "地铁站服务台",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/watch2/400/300",
+    image_data: "/images/手环.png",
     image_feature: null,
     semantic: {
       object_name: "灰色智能手环",
@@ -662,7 +662,7 @@ const SEED_RECORDS = [
     street: "松江新城",
     detail_location: "图书馆三楼阅览室",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/notebook1/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "白色笔记本",
@@ -692,7 +692,7 @@ const SEED_RECORDS = [
     street: "松江新城",
     detail_location: "图书馆失物招领处",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/notebook2/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "白色硬壳笔记本",
@@ -722,7 +722,7 @@ const SEED_RECORDS = [
     street: "南桥",
     detail_location: "百联购物中心二楼试衣间",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/tote1/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "绿色帆布手提袋",
@@ -752,7 +752,7 @@ const SEED_RECORDS = [
     street: "南桥",
     detail_location: "购物中心服务台",
     owner_id: "",
-    image_data: "https://picsum.photos/seed/tote2/400/300",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "绿色帆布袋",
