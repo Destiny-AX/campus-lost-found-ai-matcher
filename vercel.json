@@ -4,7 +4,7 @@
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "style.css", "use": "@vercel/static" },
     { "src": "script.js", "use": "@vercel/static" },
-    { "src": "public/images/**", "use": "@vercel/static" },
+    { "src": "images/**", "use": "@vercel/static" },
     { "src": "api/analyze-image.js", "use": "@vercel/node" },
     { "src": "api/records.js", "use": "@vercel/node" },
     { "src": "api/auth.js", "use": "@vercel/node" },
