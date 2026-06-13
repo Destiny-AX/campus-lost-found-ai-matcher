@@ -126,6 +126,9 @@ alter table public.lost_found_records add column if not exists claim_answer text
 alter table public.lost_found_records add column if not exists claimed_by text default '';
 alter table public.lost_found_records add column if not exists claimed_at timestamptz;
 
+-- ============== v3 升级：记录表视觉种子字段 ==============
+alter table public.lost_found_records add column if not exists visual_seed jsonb;
+
 -- ============== v3 升级：评价表 ==============
 create table if not exists public.shiyun_reviews (
   id text primary key,

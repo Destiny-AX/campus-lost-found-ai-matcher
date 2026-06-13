@@ -1402,6 +1402,7 @@ async function syncSeedRecordsToSupabase(config) {
         image_data: record.image_data || "",
         image_feature: record.image_feature,
         semantic: record.semantic,
+        visual_seed: record.visualSeed || null,
         created_at: record.created_at,
         city: record.city || "上海市",
         district: record.district || "",
@@ -1476,13 +1477,15 @@ async function handleCreate(req, res) {
     });
     const text = await response.text();
     if (!response.ok) {
-      sendJson(res, 503, { error: "数据保存失败，请稍后再试" });
+      console.error(`[handleCreate] Supabase POST failed: ${response.status} ${text.substring(0, 500)}`);
+      sendJson(res, 503, { error: "数据保存失败，请稍后再试", detail: text.substring(0, 200) });
       return;
     }
     const rows = JSON.parse(text || "[]");
     sendJson(res, 200, { record: fromSupabaseRow(rows[0], current) });
   } catch (error) {
-    sendJson(res, 503, { error: "数据保存异常，请稍后再试" });
+    console.error("[handleCreate] Exception:", error.message);
+    sendJson(res, 503, { error: "数据保存异常，请稍后再试", detail: error.message });
   }
 }
 
@@ -1715,7 +1718,8 @@ function fromSupabaseRow(row, currentUser) {
     owner_id: isOwner ? row.owner_id : "",
     imageData: row.image_data || "",
     imageFeature: row.image_feature || null,
-    semantic: row.semantic || null,    visualSeed: row.visual_seed || row.visualSeed || null,
+    semantic: row.semantic || null,
+    visualSeed: row.visual_seed || row.visualSeed || null,
     createdAt: row.created_at,
     is_fuzzy: shouldFuzzify,
     city: row.city || "上海市",

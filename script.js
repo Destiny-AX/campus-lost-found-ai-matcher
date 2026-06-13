@@ -1607,6 +1607,12 @@ async function handlePublish(event) {
       owner_id: currentUser?.sub || "",
       claim_question: data.claim_question?.trim() || "",
       imageData, imageFeature, semantic: uploadedSemantic || buildFallbackSemantic(data),
+      visualSeed: uploadedImageData ? null : {
+        background: "#f3f6f4",
+        primary: rgbToHex(colorMap[data.color] || [90, 110, 120]),
+        secondary: "#ffffff",
+        shape: data.category === "电子设备" ? "earbud" : data.category === "钥匙" ? "key" : data.category === "证件" ? "card" : "cup",
+      },
     };
 
     // 如果选择了代保管点，先寄存
@@ -1689,10 +1695,17 @@ async function persistRecord(record) {
       method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ record }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      console.error("[persistRecord] 保存失败:", response.status, err);
+      return null;
+    }
     const payload = await response.json();
     return payload.record ? hydrateRecord(payload.record) : null;
-  } catch (e) { return null; }
+  } catch (e) {
+    console.error("[persistRecord] 异常:", e);
+    return null;
+  }
 }
 
 // ============== 编辑记录 ==============
