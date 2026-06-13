@@ -1299,6 +1299,7 @@ const handler = async function handler(req, res) {
       }
     }
 
+    if (action === "diag") return await handleDiag(req, res);
     if (action === "claim-request") return await handleClaimRequest(req, res);
     if (action === "review-claim") return await handleReviewClaim(req, res);
     if (action === "submit-review") return await handleSubmitReview(req, res);
@@ -1657,6 +1658,43 @@ function toMemoryRow(record) {
 function fromMemoryRow(row, currentUser) {
   if (!row) return null;
   return fromSupabaseRow(row, currentUser);
+}
+
+// 诊断接口：检查 Supabase 连接状态
+async function handleDiag(req, res) {
+  const config = getSupabaseConfig();
+  const result = {
+    configExists: !!config,
+    urlPrefix: config ? config.url.substring(0, 30) + '...' : null,
+    keyExists: config ? !!config.key : false,
+    keyLength: config ? config.key.length : 0,
+    table: TABLE,
+    testResult: null,
+    error: null,
+  };
+
+  if (config) {
+    try {
+      const response = await supabaseFetch(config, `/rest/v1/${TABLE}?select=*&limit=1`, { method: 'GET' });
+      result.testStatus = response.status;
+      const text = await response.text();
+      result.testBody = text.substring(0, 200);
+      if (response.ok) {
+        result.testResult = 'success';
+      } else if (response.status === 404) {
+        result.testResult = 'table_not_found';
+      } else if (response.status === 401) {
+        result.testResult = 'auth_failed';
+      } else {
+        result.testResult = 'error';
+      }
+    } catch (error) {
+      result.testResult = 'exception';
+      result.error = error.message;
+    }
+  }
+
+  sendJson(res, 200, result);
 }
 
 // 模糊化函数
