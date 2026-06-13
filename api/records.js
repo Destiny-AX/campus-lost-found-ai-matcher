@@ -1411,17 +1411,18 @@ async function syncSeedRecordsToSupabase(config) {
         claim_question: record.claim_question || "",
       };
       // 先查询是否已存在
-      const checkResp = await supabaseFetch(
-        config,
-        `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id&limit=1`,
-        { method: "GET" }
-      );
-      if (checkResp.ok) {
-        const existing = await checkResp.json();
-        if (existing.length > 0) {
-          successCount++; // 已存在，算成功
-          continue;
-        }
+      const checkUrl = `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id&limit=1`;
+      const checkResp = await supabaseFetch(config, checkUrl, { method: "GET" });
+      if (!checkResp.ok) {
+        const checkErr = await checkResp.text().catch(() => "");
+        failCount++;
+        errors.push({ id: record.id, step: "check", status: checkResp.status, error: checkErr.substring(0, 200) });
+        continue;
+      }
+      const existing = await checkResp.json();
+      if (existing.length > 0) {
+        successCount++; // 已存在，算成功
+        continue;
       }
       // 不存在则插入
       const postResp = await supabaseFetch(config, `/rest/v1/${TABLE}`, {
@@ -1442,7 +1443,7 @@ async function syncSeedRecordsToSupabase(config) {
           successCount++;
         } else {
           failCount++;
-          errors.push({ id: record.id, error: errText.substring(0, 200) });
+          errors.push({ id: record.id, step: "insert", status: postResp.status, error: errText.substring(0, 200) });
         }
       }
     }
@@ -1450,7 +1451,8 @@ async function syncSeedRecordsToSupabase(config) {
     errors.push({ id: "global", error: error.message });
   }
   // 输出同步日志到控制台（Vercel日志中可见）
-  console.log(`[SYNC] Seed sync complete: ${successCount}/${SEED_RECORDS.length} success, ${failCount} failed. Errors: ${JSON.stringify(errors.slice(0, 3))}`);
+  const firstError = errors.length > 0 ? errors[0] : null;
+  console.log(`[SYNC] Seed sync complete: ${successCount}/${SEED_RECORDS.length} success, ${failCount} failed. First error: ${JSON.stringify(firstError)}`);
   return { successCount, failCount, errors };
 }
 
