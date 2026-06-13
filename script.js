@@ -831,9 +831,12 @@ function showMatchContact(record) {
   showToast(`联系方式：${contact}`, "success");
 }
 
+ 
+
 function renderMiniRecord(record) {
+  const fuzzy = record.is_fuzzy;
   return `<div class="mini-record">
-    <img src="${record.imageData}" alt="${escapeHtml(record.title)}" />
+    <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
     <div><strong>${escapeHtml(record.title)}</strong>
     <div class="meta-line">${record.type === "lost" ? "寻物" : "招领"} · ${escapeHtml(record.category)} · ${escapeHtml(record.color)}</div>
     <div class="meta-line">${escapeHtml(record.location)} · ${formatTime(record.time)}</div></div>
@@ -845,9 +848,10 @@ function renderMatchItem(record, result) {
   const score = Math.round(result.score);
   const scoreColor = score >= 80 ? "#34c759" : score >= 60 ? "#ff9500" : "#0071e3";
   const ringOffset = 100 - score;
+  const fuzzy = record.is_fuzzy;
   return `<article class="match-item">
     <div class="match-item-media">
-      <img src="${record.imageData}" alt="${escapeHtml(record.title)}" />
+      <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
       <div class="match-score-ring" style="--score:${score};--ring-color:${scoreColor}">
         <svg viewBox="0 0 36 36">
           <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
