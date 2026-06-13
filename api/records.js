@@ -1402,7 +1402,6 @@ async function syncSeedRecordsToSupabase(config) {
         image_data: record.image_data || "",
         image_feature: record.image_feature,
         semantic: record.semantic,
-        visual_seed: record.visualSeed || null,
         created_at: record.created_at,
         city: record.city || "上海市",
         district: record.district || "",
