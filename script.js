@@ -681,9 +681,14 @@ function renderInspector() {
     `).join("");
   }
 
-  // 热门标签：从记录中提取高频类别
+  // 热门标签：从记录中提取高频类别（过滤掉无效类别如"??"）
   const categoryCounts = {};
-  records.forEach(r => { categoryCounts[r.category] = (categoryCounts[r.category] || 0) + 1; });
+  records.forEach(r => {
+    const cat = r.category;
+    if (cat && cat !== "??" && cat.trim() !== "") {
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
+  });
   const topTags = Object.entries(categoryCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
