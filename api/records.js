@@ -1519,6 +1519,7 @@ function toMemoryRow(record) {
     image_data: record.imageData,
     image_feature: record.imageFeature,
     semantic: record.semantic,
+    visual_seed: record.visualSeed || null,
     created_at: record.createdAt,
     city: record.city || "上海市",
     district: record.district || "",
