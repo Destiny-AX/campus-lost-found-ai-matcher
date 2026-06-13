@@ -275,9 +275,9 @@ body {
 .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s var(--ease-out); }
 .card:hover .thumb img { transform: scale(1.04); }
 
-.card-body { padding: 16px; }
-.card-body h4 { font-size: var(--text-lg); font-weight: 600; margin-bottom: 6px; line-height: 1.35; letter-spacing: -0.01em; }
-.card-body p { font-size: var(--text-base); color: var(--text-secondary); margin: 4px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.6; margin-bottom: 12px; }
+.card-body { padding: 16px 18px 18px; }
+.card-body h4 { font-size: 17px; font-weight: 600; margin-bottom: 8px; line-height: 1.35; letter-spacing: -0.01em; }
+.card-body p { font-size: 14px; color: var(--text2); margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.6; margin-bottom: 14px; }
 
 .badge-row {
   position: absolute; top: 12px; left: 12px; display: flex; gap: 6px;
@@ -292,10 +292,6 @@ body {
   padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
   background: rgba(0,0,0,0.55); color: #fff;
 }
-
-.card-body { padding: 16px 18px 18px; }
-.card-body h4 { font-size: 17px; font-weight: 600; margin-bottom: 8px; line-height: 1.35; letter-spacing: -0.01em; }
-.card-body p { font-size: 14px; color: var(--text2); margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.6; margin-bottom: 14px; }
 
 .meta-line {
   display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--text3); margin: 6px 0;
@@ -761,7 +757,7 @@ body {
 .detail-header h3 { font-size: 18px; font-weight: 600; }
 .detail-body { padding: 24px; }
 .detail-body img {
-  width: 100%; max-height: 280px; object-fit: cover;
+  width: 100%; aspect-ratio: 16/9; object-fit: cover;
   border-radius: var(--radius-sm); margin-bottom: 16px;
   transition: transform 0.4s var(--ease-out);
 }
@@ -881,7 +877,6 @@ body {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.card { animation: cardIn 0.4s ease-out both; }
 
 /* ============== Button Ripple & Active ============== */
 .primary-action, .ghost-button, .danger-button, .text-button {
@@ -1364,6 +1359,7 @@ body {
   .card { padding: 0; }
   .card:hover { transform: none; box-shadow: var(--shadow); border-color: var(--border); }
   .card:active { transform: scale(0.96); background: var(--surface-2); }
+  .thumb { aspect-ratio: 16/9; }
 
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .algorithm-grid { grid-template-columns: 1fr; }

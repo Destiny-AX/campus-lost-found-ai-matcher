@@ -732,6 +732,7 @@ function renderRecordCard(record) {
   const adminActions = isAdmin() && !isOwn ? `<button class="danger-button" data-admin-delete-id="${record.id}" type="button">管理员删除</button>` : "";
   const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
   const imgSrc = record.imageData || createSyntheticImage(record.visualSeed || defaultSeed, record.title);
+  const fallbackSrc = createSyntheticImage(record.visualSeed || defaultSeed, record.title);
   // 优先使用结构化地点展示
   const locationDisplay = record.district && record.street
     ? `${escapeHtml(record.district)} · ${escapeHtml(record.street)}`
@@ -739,7 +740,7 @@ function renderRecordCard(record) {
   return `
     <article class="card${fuzzy ? " is-fuzzy" : ""}">
       <span class="thumb">
-        <img src="${imgSrc}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
+        <img src="${imgSrc}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} onerror="this.onerror=null;this.src='${fallbackSrc}';" />
         <span class="badge-row">
           <span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span>
           <span class="match-badge">匹配 ${Math.round(best.score)}%</span>
@@ -1109,9 +1110,10 @@ function openDetail(id) {
     reviewSection = `<button class="ghost-button" id="reviewBtn" type="button">评价此次交易</button>`;
   }
 
+  const detailFallback = createSyntheticImage(record.visualSeed || { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" }, record.title);
   els.detailContent.innerHTML = `
     <div class="detail-content">
-      <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
+      <img src="${record.imageData || detailFallback}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} onerror="this.onerror=null;this.src='${detailFallback}';" />
       <div class="detail-body">
         <div><span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span><h3>${escapeHtml(record.title)}</h3></div>
         <div class="meta-line">
