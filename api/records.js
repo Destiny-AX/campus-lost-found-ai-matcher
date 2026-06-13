@@ -1468,9 +1468,8 @@ function fromSupabaseRow(row, currentUser) {
   if (!row) return null;
   const isOwner = currentUser?.sub && row.owner_id === currentUser.sub;
   const isVerified = currentUser?.verified;
-  const isDemo = row.id && String(row.id).startsWith("demo-");
-  // 示例数据用于演示，不模糊化；真实数据需认证后才能查看完整信息
-  const shouldFuzzify = !isDemo && !isOwner && !isVerified;
+  // 统一逻辑：未登录且未认证时，所有数据（含示例数据）均模糊化处理
+  const shouldFuzzify = !isOwner && !isVerified;
 
   const record = {
     id: row.id,
