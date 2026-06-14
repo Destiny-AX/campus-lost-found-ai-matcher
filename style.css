@@ -14,7 +14,7 @@
   --text-primary: #1d1d1f; --text-secondary: #6e6e73; --text-tertiary: #aeaeb2;
   /* 兼容旧变量 */
   --text: #1d1d1f; --text2: #6e6e73; --text3: #aeaeb2;
-  --bg: #f5f5f7; --surface: #ffffff; --border: #e5e5ea;
+  --bg: #f5f5f7; --surface: #ffffff; --card: #ffffff; --border: #e5e5ea;
   --glass: rgba(255,255,255,0.78); --glass-blur: blur(20px) saturate(180%);
   /* 功能软色 */
   --green-soft: rgba(52,199,89,0.08); --orange-soft: rgba(255,149,0,0.08); --red-soft: rgba(255,59,48,0.08);
@@ -1311,13 +1311,13 @@ body {
 .bottom-tabs {
   display: none; position: fixed; bottom: 0; left: 0; right: 0;
   background: var(--glass); backdrop-filter: var(--glass-blur);
-  border-top: 1px solid var(--border); padding: 6px 0; padding-bottom: env(safe-area-inset-bottom, 6px);
+  border-top: 1px solid var(--border); padding: 8px 0; padding-bottom: env(safe-area-inset-bottom, 8px);
   z-index: 100;
 }
 .bottom-tabs .tab-item {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  border: none; background: transparent; font-size: 10px; color: var(--text3);
-  cursor: pointer; padding: 4px 0;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: none; background: transparent; font-size: 12px; color: var(--text3);
+  cursor: pointer; padding: 8px 0;
 }
 .bottom-tabs .tab-item.is-active { color: var(--blue); position: relative; }
 .bottom-tabs .tab-item.is-active::before {
@@ -1327,7 +1327,7 @@ body {
   width: 20px; height: 3px; background: var(--blue);
   border-radius: 0 0 2px 2px;
 }
-.tab-icon { font-size: 20px; }
+.tab-icon { font-size: 24px; }
 
 /* ============== Responsive — 移动端优化 ============== */
 @media (max-width: 1180px) {
@@ -1338,7 +1338,7 @@ body {
 @media (max-width: 1024px) {
   .side-nav { display: none; }
   .app-shell { grid-template-columns: 1fr; }
-  .content { padding: 16px 20px 80px; }
+  .content { padding: 16px 20px 80px; max-width: 100%; }
   .bottom-tabs { display: flex; }
 
   .mobile-title {
@@ -1422,9 +1422,9 @@ body {
 
   /* 底部导航优化 */
   .bottom-tabs .tab-item {
-    padding: 6px 0 8px;
-    gap: 3px;
-    font-size: 11px;
+    padding: 10px 0 12px;
+    gap: 4px;
+    font-size: 13px;
     transition: color 0.2s, background 0.2s;
   }
   .bottom-tabs .tab-item.is-active {
@@ -1445,6 +1445,164 @@ body {
   .primary-action, .ghost-button, .danger-button {
     min-height: 44px;
     padding: 10px 16px;
+  }
+
+  /* 搜索框整体优化 */
+  .search-box {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .search-input-wrap input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  /* 筛选栏优化 */
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+    position: relative;
+    top: 0;
+  }
+  .filter-bar .search-box {
+    width: 100%;
+    margin-bottom: 0;
+  }
+  .filter-bar .search-box input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .filter-bar select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  /* 统计面板优化 */
+  .stats-bar {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+  .stat-item {
+    padding: 0 8px;
+    gap: 8px;
+  }
+  .stat-icon {
+    font-size: 22px;
+  }
+  .stat-number {
+    font-size: 20px;
+  }
+  .stat-label {
+    font-size: 10px;
+  }
+  .stat-divider {
+    height: 28px;
+  }
+
+  /* section-head 优化 */
+  .section-head {
+    margin-bottom: 16px;
+  }
+  .section-head h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  /* 移动端搜索框和下拉框优化 */
+  .search-select-wrap,
+  .location-select-wrap {
+    min-width: 100%;
+    width: 100%;
+  }
+  .search-select-input,
+  .location-select-wrap select {
+    background: var(--bg) !important;
+    font-size: 16px; /* 防止iOS缩放 */
+    min-height: 44px;
+  }
+  .search-select-dropdown {
+    background: var(--card) !important;
+    z-index: 1000; /* 确保下拉框在最上层 */
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    max-height: 200px;
+  }
+  .search-select-option {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+  .location-filter-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* 匹配页面 */
+  .match-item {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+  .match-item-media img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16/10;
+  }
+  .match-score-ring {
+    bottom: 8px;
+    right: 8px;
+  }
+
+  /* 吉祥物隐藏 */
+  .mascot-host {
+    display: none;
+  }
+
+  /* 用户状态栏 */
+  .user-status-bar {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  /* 位置级联选择器 */
+  .location-cascade {
+    grid-template-columns: 1fr;
+  }
+
+  /* 浮动通知 */
+  .float-notify-host {
+    left: 12px;
+    right: 12px;
+    bottom: 80px;
+    align-items: center;
+  }
+  .float-notify {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* Toast通知位置调整 */
+  .toast-host {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    align-items: center;
+  }
+  .toast {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  /* 对话框优化 */
+  .dialog-overlay {
+    align-items: flex-end;
+  }
+  .dialog {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--radius) var(--radius) 0 0;
+    max-height: 85vh;
   }
 }
 
@@ -1505,47 +1663,6 @@ body {
 .info-banner-close:hover {
   background: rgba(0,0,0,0.1);
   color: var(--text);
-}
-
-/* 移动端适配 */
-@media (max-width: 768px) {
-  .info-banner {
-    padding: 10px 16px;
-  }
-  .info-banner-text {
-    font-size: 12px;
-  }
-
-  /* 移动端搜索框和下拉框优化 */
-  .search-row {
-    flex-direction: column;
-    gap: 10px;
-  }
-  .search-select-wrap,
-  .location-select-wrap {
-    min-width: 100%;
-    width: 100%;
-  }
-  .search-select-input,
-  .location-select-wrap select {
-    background: var(--bg) !important;
-    font-size: 16px; /* 防止iOS缩放 */
-    min-height: 44px;
-  }
-  .search-select-dropdown {
-    background: var(--card) !important;
-    z-index: 1000; /* 确保下拉框在最上层 */
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    max-height: 200px;
-  }
-  .search-select-option {
-    padding: 12px 16px;
-    font-size: 15px;
-  }
-  .location-filter-row {
-    flex-direction: column;
-    gap: 10px;
-  }
 }
 
 /* ============== 认证状态样式 ============== */
