@@ -1661,6 +1661,7 @@ function normalizeRecord(record, currentUser) {
     street: String(record.street || "").slice(0, 40),
     detail_location: String(record.detail_location || "").slice(0, 60),
     claim_question: String(record.claim_question || "").slice(0, 200),
+    visualSeed: record.visualSeed || null,
   };
 }
 

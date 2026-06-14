@@ -158,3 +158,41 @@ create index if not exists shiyun_claim_requests_claimant_idx on public.shiyun_c
 
 -- ============== v4 升级：用户角色字段 ==============
 alter table public.shiyun_users add column if not exists role text default 'user' check (role in ('user', 'admin'));
+
+-- ============== RLS 策略：允许匿名用户读写 ==============
+-- 先禁用 RLS（如果之前启用了但没有正确配置策略）
+alter table if exists public.lost_found_records disable row level security;
+
+-- 或者启用 RLS 并添加允许所有用户访问的策略（根据项目需求选择）
+-- 由于本项目使用 Service Role Key 访问，RLS 对后端 API 不生效
+-- 但为了安全，建议启用 RLS 并配置合适的策略
+
+-- 启用 RLS
+alter table if exists public.lost_found_records enable row level security;
+
+-- 删除旧策略（如果存在）
+drop policy if exists "Allow anonymous read" on public.lost_found_records;
+drop policy if exists "Allow anonymous insert" on public.lost_found_records;
+drop policy if exists "Allow anonymous update" on public.lost_found_records;
+
+-- 创建允许所有用户读取的策略
+create policy "Allow anonymous read"
+  on public.lost_found_records
+  for select
+  to anon, authenticated
+  using (true);
+
+-- 创建允许所有用户插入的策略
+create policy "Allow anonymous insert"
+  on public.lost_found_records
+  for insert
+  to anon, authenticated
+  with check (true);
+
+-- 创建允许所有用户更新的策略
+create policy "Allow anonymous update"
+  on public.lost_found_records
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
