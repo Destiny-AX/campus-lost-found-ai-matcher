@@ -1402,7 +1402,6 @@ async function syncSeedRecordsToSupabase(config) {
         image_data: record.image_data || "",
         image_feature: record.image_feature,
         semantic: record.semantic,
-        visual_seed: record.visualSeed || null,
         created_at: record.created_at,
         city: record.city || "上海市",
         district: record.district || "",
@@ -1410,6 +1409,10 @@ async function syncSeedRecordsToSupabase(config) {
         detail_location: record.detail_location || "",
         claim_question: record.claim_question || "",
       };
+      // visual_seed 列可能不存在于数据库中，仅在存在时添加
+      if (record.visualSeed) {
+        row.visual_seed = record.visualSeed;
+      }
       // 先查询是否已存在
       const checkUrl = `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(record.id)}&select=id&limit=1`;
       const checkResp = await supabaseFetch(config, checkUrl, { method: "GET" });
@@ -1666,7 +1669,7 @@ function normalizeRecord(record, currentUser) {
 }
 
 function toSupabaseRow(record) {
-  return {
+  const row = {
     id: record.id,
     type: record.type,
     title: record.title,
@@ -1684,7 +1687,6 @@ function toSupabaseRow(record) {
     image_data: record.imageData,
     image_feature: record.imageFeature,
     semantic: record.semantic,
-    visual_seed: record.visualSeed || null,
     created_at: record.createdAt,
     city: record.city,
     district: record.district,
@@ -1692,6 +1694,11 @@ function toSupabaseRow(record) {
     detail_location: record.detail_location,
     claim_question: record.claim_question,
   };
+  // visual_seed 列可能不存在于数据库中，仅在列存在时添加
+  if (record.visualSeed) {
+    row.visual_seed = record.visualSeed;
+  }
+  return row;
 }
 
 function fromSupabaseRow(row, currentUser) {
