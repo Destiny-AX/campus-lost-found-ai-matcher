@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0071e3" />
     <title>拾寻 · 城市拾遗网络</title>
-    <link rel="stylesheet" href="style.css?v=2" />
+    <link rel="stylesheet" href="style.css?v=13" />
   </head>
   <body>
     <!-- 顶部 Toast 通知容器 -->
@@ -24,7 +24,7 @@
       <!-- ============== 侧边导航（桌面） ============== -->
       <aside class="side-nav" aria-label="主导航">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">拾</div>
+          <div class="brand-mark" aria-hidden="true"><img src="images/logo.png" alt="拾寻" /></div>
           <div>
             <h1>拾寻</h1>
             <p>城市拾遗网络</p>
@@ -57,10 +57,6 @@
       <!-- ============== 主内容区 ============== -->
       <main class="content">
         <header class="top-bar">
-          <div>
-            <p class="eyebrow">拾寻 · 城市失物招领平台</p>
-            <h2>城市拾遗网络</h2>
-          </div>
           <div class="top-bar-actions">
             <button class="ghost-button" id="topVerifyBtn" type="button" hidden>实名认证</button>
             <button class="primary-action" id="topAuthBtn" type="button">微信登录</button>
@@ -68,11 +64,7 @@
         </header>
 
         <section class="mobile-title" aria-label="移动端标题">
-          <div class="mobile-brand-mark" aria-hidden="true">拾</div>
-          <div class="mobile-title-text">
-            <h1>拾寻</h1>
-            <p>城市拾遗网络</p>
-          </div>
+          <div class="mobile-brand-mark" aria-hidden="true"><img src="images/logo.png" alt="拾寻" /></div>
           <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
         </section>
 
@@ -471,6 +463,9 @@
       <button class="tab-item" data-view-target="publish" type="button">
         <span class="tab-icon">＋</span><span>发布</span>
       </button>
+      <button class="tab-item" data-view-target="match" type="button">
+        <span class="tab-icon">◎</span><span>匹配</span>
+      </button>
       <button class="tab-item" data-view-target="notify" type="button">
         <span class="tab-icon">♪</span><span>消息<span class="badge-dot" id="notifyBadgeMobile" hidden></span></span>
       </button>
@@ -602,6 +597,6 @@
       <div class="mascot-avatar" id="mascotAvatar">🐱</div>
     </div>
 
-    <script src="script.js?v=8"></script>
+    <script src="script.js?v=9"></script>
   </body>
 </html>

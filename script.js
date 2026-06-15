@@ -183,12 +183,18 @@ function bindEvents() {
     btn.addEventListener("click", () => switchView(btn.dataset.viewTarget));
   });
 
-  // 筛选（顶部 type filter：失物/招领/全部）
-  document.querySelectorAll(".view-switcher [data-filter]").forEach((btn) => {
+  // 筛选（顶部 type filter：失物/招领/全部/官方）
+  document.querySelectorAll(".filter-group [data-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeFilter = btn.dataset.filter;
-      document.querySelectorAll(".view-switcher [data-filter]").forEach((c) => c.classList.remove("is-active"));
+      document.querySelectorAll(".filter-group [data-filter]").forEach((c) => c.classList.remove("is-active"));
       btn.classList.add("is-active");
+      // 类型切换时，重置类别筛选为"全部"并动态更新可选项
+      if (els.categoryFilter) els.categoryFilter.value = "all";
+      document.querySelectorAll("#filterChips .filter-chip").forEach((c) => c.classList.remove("is-active"));
+      const allChip = document.querySelector('#filterChips .filter-chip[data-filter="all"]');
+      if (allChip) allChip.classList.add("is-active");
+      renderCategoryChips();
       renderItemList();
     });
   });
@@ -617,6 +623,7 @@ async function loadCustodyPoints() {
 
 // ============== 渲染 ==============
 function renderAll() {
+  renderCategoryChips();
   renderItemList();
   renderQueryOptions();
   renderMatchView();
@@ -624,6 +631,56 @@ function renderAll() {
   renderCustodyOptions();
   renderUserStatusBar();
   renderInspector();
+}
+
+// 根据当前类型筛选动态更新类别 chips
+function renderCategoryChips() {
+  const container = document.getElementById("filterChips");
+  if (!container) return;
+
+  // 基于当前类型筛选，统计各类别出现次数
+  const typeFiltered = records.filter((r) => {
+    if (activeFilter === "all") return true;
+    if (activeFilter === "institution") return r.item_status === "institution";
+    return r.type === activeFilter;
+  });
+
+  const categoryCounts = {};
+  typeFiltered.forEach((r) => {
+    const cat = r.category;
+    if (cat && cat !== "??" && cat.trim() !== "") {
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
+  });
+
+  // 按出现次数排序的类别列表
+  const sortedCategories = Object.entries(categoryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat]) => cat);
+
+  // 保留"全部"选项，后面跟实际存在的类别
+  const allCategories = ["全部", ...sortedCategories];
+
+  // 当前选中的类别
+  const currentCategory = els.categoryFilter?.value || "all";
+
+  // 重新渲染 chips
+  container.innerHTML = allCategories.map((cat) => {
+    const filterVal = cat === "全部" ? "all" : cat;
+    const isActive = currentCategory === filterVal ? "is-active" : "";
+    return `<button class="filter-chip ${isActive}" data-filter="${escapeHtml(filterVal)}" type="button">${escapeHtml(cat)}</button>`;
+  }).join("");
+
+  // 重新绑定点击事件
+  container.querySelectorAll(".filter-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const val = chip.dataset.filter;
+      if (els.categoryFilter) els.categoryFilter.value = val;
+      container.querySelectorAll(".filter-chip").forEach((c) => c.classList.remove("is-active"));
+      chip.classList.add("is-active");
+      renderItemList();
+    });
+  });
 }
 
 function renderItemList() {
@@ -659,6 +716,13 @@ function renderActiveFilters() {
   const category = els.categoryFilter?.value || "all";
   const district = els.filterDistrict?.value || "all";
   const street = els.filterStreet?.value || "all";
+
+  // 类型筛选标签
+  if (activeFilter !== "all") {
+    const typeMap = { lost: "寻物", found: "招领", institution: "官方", hot: "高匹配" };
+    tags.push({ type: "type", label: activeFilter, text: `类型：${typeMap[activeFilter] || activeFilter}` });
+  }
+
   if (category !== "all") tags.push({ type: "category", label: category, text: `类别：${category}` });
   if (district !== "all") tags.push({ type: "district", label: district, text: `📍 ${district}` });
   if (street !== "all") tags.push({ type: "street", label: street, text: `🏘️ ${street}` });
@@ -716,20 +780,43 @@ function renderInspector() {
 // 从 Inspector 标签设置类别筛选
 function setCategoryFilter(category) {
   if (els.categoryFilter) els.categoryFilter.value = category;
-  // 同步 chip 状态
-  document.querySelectorAll(".filter-chip").forEach(chip => {
-    chip.classList.toggle("is-active", chip.dataset.filter === category);
-  });
+  // 同步 chip 状态（针对动态渲染的 filter-chips）
+  const chipsContainer = document.getElementById("filterChips");
+  if (chipsContainer) {
+    // 如果目标类别不在当前 chips 中，先重置为全部
+    const targetChip = chipsContainer.querySelector(`.filter-chip[data-filter="${CSS.escape(category)}"]`);
+    if (!targetChip && category !== "all") {
+      // 类别不在当前类型下，切换到全部类型以显示该类别
+      activeFilter = "all";
+      document.querySelectorAll(".filter-group [data-filter]").forEach((c) => c.classList.remove("is-active"));
+      const allBtn = document.querySelector('.filter-group [data-filter="all"]');
+      if (allBtn) allBtn.classList.add("is-active");
+      renderCategoryChips();
+    }
+    // 重新查询并更新激活状态
+    chipsContainer.querySelectorAll(".filter-chip").forEach(chip => {
+      chip.classList.toggle("is-active", chip.dataset.filter === category);
+    });
+  }
   renderItemList();
 }
 
 // 清除单个筛选条件
 function clearFilter(type) {
+  if (type === "type") {
+    activeFilter = "all";
+    document.querySelectorAll(".filter-group [data-filter]").forEach((c) => c.classList.remove("is-active"));
+    const allBtn = document.querySelector('.filter-group [data-filter="all"]');
+    if (allBtn) allBtn.classList.add("is-active");
+    // 重置类别筛选并重新渲染类别选项
+    if (els.categoryFilter) els.categoryFilter.value = "all";
+    renderCategoryChips();
+  }
   if (type === "category" && els.categoryFilter) els.categoryFilter.value = "all";
   if (type === "district" && els.filterDistrict) { els.filterDistrict.value = "all"; renderLocationStreets(); }
   if (type === "street" && els.filterStreet) els.filterStreet.value = "all";
   // 同步 chip 状态
-  document.querySelectorAll(".filter-chip").forEach(chip => {
+  document.querySelectorAll("#filterChips .filter-chip").forEach(chip => {
     chip.classList.toggle("is-active", chip.dataset.filter === "all");
   });
   renderItemList();
