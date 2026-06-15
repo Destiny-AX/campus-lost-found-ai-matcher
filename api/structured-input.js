@@ -14,6 +14,7 @@ const {
 // 文本模型，与视觉模型分开（视觉模型也能跑文本但成本更高）
 const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "Qwen/Qwen3-8B";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
+const MAX_TOKENS = 800;
 
 // 允许的类别枚举，AI 输出必须落在这些值上
 const CATEGORIES = ["证件", "电子设备", "生活用品", "学习用品", "钥匙", "箱包", "贵重物品", "其他"];
@@ -80,7 +81,7 @@ module.exports = async function handler(req, res) {
           { role: "user", content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 500,
+        max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
@@ -121,76 +122,97 @@ module.exports = async function handler(req, res) {
 };
 
 function buildPrompt(text) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const nowStr = now.toISOString().slice(0, 16);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
   return [
-    "你是一位专业的失物招领信息提取助手。请从用户描述中精准提取关键信息，输出严格 JSON。",
+    "你是一位失物招领信息提取助手。从用户描述中提取关键信息，输出严格的 JSON 对象，不要输出任何其他内容。",
     "",
-    "## 提取规则（按优先级排序）",
+    "━━━ 提取规则（严格遵循）━━━",
     "",
-    "### 1. title（最重要）",
-    "- 只提取物品名称本身，绝对不要包含地点、时间、动作、状态等冗余信息",
-    "- 去除所有修饰词：颜色、数量、大小、新旧等",
-    '- 错误示例："黑色一加耳机" → 不要输出"黑色一加耳机"，正确输出："一加耳机"',
-    '- 错误示例："在图书馆捡到一个蓝色校园卡套" → 不要输出整句话，正确输出："校园卡套"',
-    '- 错误示例："丢了身份证" → 正确输出："身份证"',
-    "- 控制在 15 字以内，优先使用常见物品名称",
+    "## title — 物品核心名称（最重要）",
+    "只提取物品名称本身，绝对不允许添加任何修饰词",
+    "❌ 禁止包含：颜色、数量、新旧、大小、地点、动作词（丢/捡/看到/发现/找了/没了）",
+    '❌ "黑色一加耳机" → 错误，应输出 "一加耳机"',
+    '❌ "丢了身份证" → 错误，应输出 "身份证"',
+    '❌ "一个蓝色校园卡套" → 错误，应输出 "校园卡套"',
+    '❌ "在图书馆捡到的学生证" → 错误，应输出 "学生证"',
+    '✅ 只输出物品核心名称，≤15字',
     "",
-    "### 2. type",
-    '- "lost": 出现"丢""遗失""掉了""找不到""不见了"',
-    '- "found": 出现"捡到""拾到""捡了""拾了""发现"',
+    "## type",
+    '- "lost": 含"丢""遗失""掉了""找不到""不见了""没了"',
+    '- "found": 含"捡到""拾到""捡了""拾了""看到""发现""找到"（且不含丢的含义）',
     "",
-    "### 3. category",
-    `- 必须是以下之一：${CATEGORIES.join("、")}`,
+    "## category — 严格从以下10个中选择1个",
+    "证件：身份证、学生证、校园卡、校园卡套、驾驶证、护照、门禁卡、银行卡、社保卡",
+    "电子设备：手机、耳机、蓝牙耳机、AirPods、电脑、笔记本、平板、iPad、充电器、充电宝、数据线、U盘",
+    "生活用品：伞、雨伞、水杯、保温杯、口红、化妆包、化妆品、镜子、梳子、围巾、帽子、手套",
+    "学习用品：书、课本、教材、笔、本子、文具盒、笔记、试卷、计算器",
+    "钥匙：钥匙、钥匙扣、车钥匙、门钥匙",
+    "箱包：背包、书包、双肩包、钱包、手提包、行李箱、挎包、单肩包、公文包",
+    "贵重物品：手表、项链、戒指、手镯、耳环、首饰、金饰、玉器",
+    "其他：无法归入以上类别的物品",
+    "⚠️ 校园卡套属于'证件'类，不属于'生活用品'。耳机属于'电子设备'类",
     "",
-    "### 4. color",
-    `- 必须是以下之一：${COLORS.join("、")}`,
-    "- 如果有多个颜色，只取物品主体颜色",
+    "## color — 严格从以下10个中选择1个，不存在的填空字符串",
+    "黑色、白色、蓝色、红色、黄色、绿色、银色、灰色、粉色、透明",
     "",
-    "### 5. location（纯文本，用于展示）",
-    "- 精确提取地点，保留\"地铁站\"\"图书馆\"等关键地标",
-    "- 去除动作词：\"在\"\"丢在\"\"捡到\"等",
-    '- 错误示例："在传媒大学图书馆" → 正确："传媒大学图书馆"',
+    "## location — 纯地点文本",
+    "去除所有动词前缀（在/丢在/捡到/掉在/落在）",
+    '"在图书馆丢的" → "图书馆"',
     "",
-    "### 5a. district（区/县）",
-    `- 必须是以下之一：${Object.keys(STREET_DATA).join("、")}`,
-    "- 从地点中识别所属区",
+    "## district — 从16个区中选择",
+    "黄浦区、静安区、徐汇区、长宁区、普陀区、虹口区、杨浦区、浦东新区、闵行区、宝山区、嘉定区、金山区、松江区、青浦区、奉贤区、崇明区",
     "",
-    "### 5b. street（街道/地标）",
-    "- 从地点中识别具体街道、商圈或地标名称",
-    "- 例如：南京东路、人民广场、徐家汇",
+    "## street — 从地点中提取的街道或地标名称",
+    "如：南京东路、人民广场、外滩、徐家汇、五角场",
     "",
-    "### 5c. detail_location（具体位置，选填）",
-    "- 更精确的位置描述，如'地铁站5号口'、'图书馆三楼'",
+    "## detail_location — 更精确的位置",
+    "如：地铁站5号口、图书馆三楼B区、食堂门口",
     "",
-    "### 6. time",
-    "- 解析相对时间并转换为 ISO 8601 格式（YYYY-MM-DDTHH:mm）",
-    "- 昨天下午3点 = 昨天日期 15:00",
+    "## time — ISO 8601 格式 YYYY-MM-DDTHH:mm",
+    `"昨天下午3点左右" → "${yesterdayStr}T15:00"`,
+    `"今天早上" → "${todayStr}T08:00"`,
+    `"今天中午" → "${todayStr}T12:00"`,
+    `"今天下午" → "${todayStr}T15:00"`,
+    `"刚刚""现在""刚才" → "${nowStr}"`,
     "",
-    "### 7. contact",
-    "- 个人：提取手机号/微信号",
-    `- 公共机构（派出所/地铁站/机场等）：填写"机构名称 + 电话"，如"南京东路派出所 021-63170110"`,
-    "- 去除动词前缀：\"已联系\"\"交给\"\"送到\"等",
-    '- 错误示例："已联系地铁站服务台" → 正确："地铁站服务台"',
+    "## contact — 联系方式",
+    `机构类：如"地铁站服务台 021-12345678"`,
+    "个人类：手机号或微信号",
+    "❌ 不要包含动词前缀（已联系/交给/送到）",
+    '"已联系地铁站服务台" → 错误，应输出 "地铁站服务台"',
     "",
-    "### 8. description",
-    "- 保留完整描述，去除口语化表达，整理为通顺陈述句",
+    "## item_status — 物品当前状态",
+    '"in_place": 仍在原处',
+    '"custody": 有人代为保管',
+    '"institution": 已交给机构（服务台/派出所/地铁站等）',
+    '"unknown": 无法判断',
     "",
-    "### 9. item_status",
-    `- ${ITEM_STATUS.join("/")} 之一`,
-    "- \"已交\"\"交给\"\"送到\" → institution",
-    "- \"代为保管\"\"拿着\" → custody",
-    "- \"仍在原地\"\"还在\" → in_place",
+    "## description",
+    "整理为通顺陈述句，去除口语化表达，不重复原文",
     "",
-    "## 输出示例",
+    "## confidence — 0到1的数字，表示本次提取的整体准确度",
     "",
-    "输入：\"昨天下午在人民广场地铁站捡到一个黑色一加耳机，已交给服务台，电话 021-12345678\"",
-    "输出：",
-    '{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"人民广场地铁站","district":"黄浦区","street":"人民广场","detail_location":"地铁站","time":"2026-06-03T15:00","contact":"人民广场地铁站服务台 021-12345678","description":"在人民广场地铁站捡到黑色一加耳机，已交给服务台","item_status":"institution","confidence":0.95}',
+    "━━━ 三段输入/输出示例 ━━━",
     "",
-    "输入：\"我的蓝色校园卡套丢了，里面有校园卡和门禁卡，可能在图书馆\"",
-    "输出：",
-    '{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆","district":"","street":"","detail_location":"","time":"2026-06-04T10:00","contact":"","description":"蓝色校园卡套丢失，内有校园卡和门禁卡，最后出现在图书馆","item_status":"unknown","confidence":0.92}',
+    `示例1 输入："昨天下午在人民广场地铁站捡到一个黑色一加耳机，已交给服务台，电话021-63170110"`,
+    '示例1 输出：{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"人民广场地铁站","district":"黄浦区","street":"人民广场","detail_location":"地铁站",' + `"time":"${yesterdayStr}T15:00","contact":"人民广场地铁站服务台 021-63170110","item_status":"institution","description":"在人民广场地铁站捡到一加耳机，已交服务台","confidence":0.96}`,
     "",
-    `当前时间：${new Date().toISOString()}`,
+    `示例2 输入："我的蓝色校园卡套丢了，里面有校园卡和门禁卡，可能在图书馆也可能是掉在路上了"`,
+    '示例2 输出：{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆",' + `"district":"","street":"","detail_location":"","time":"${todayStr}T12:00","contact":"","item_status":"unknown","description":"蓝色校园卡套丢失，内含校园卡和门禁卡，可能在图书馆或路上","confidence":0.88}`,
+    "",
+    `示例3 输入："刚刚在操场看到一个银色钥匙扣，上面有三把钥匙，还在那没人动"`,
+    '示例3 输出：{"type":"found","title":"钥匙扣","category":"钥匙","color":"银色","location":"操场",' + `"district":"","street":"","detail_location":"","time":"${nowStr}","contact":"","item_status":"in_place","description":"在操场发现银色钥匙扣，有三把钥匙，仍在原处","confidence":0.93}`,
+    "",
+    `示例4 输入："今天上午在浦东陆家嘴地铁站口丢了苹果AirPods Pro，白色壳，找不到了"`,
+    '示例4 输出：{"type":"lost","title":"AirPods Pro","category":"电子设备","color":"白色","location":"浦东新区陆家嘴地铁站","district":"浦东新区","street":"陆家嘴","detail_location":"地铁站口",' + `"time":"${todayStr}T10:00","contact":"","item_status":"unknown","description":"在浦东新区陆家嘴地铁站口丢失苹果AirPods Pro白色款","confidence":0.91}`,
+    "",
+    `当前时间: ${nowStr}`,
     "",
     "## 用户描述",
     text,
@@ -224,6 +246,10 @@ function normalizeStructured(value, originalText) {
   // 二次清理 title：确保没有颜色词、动作词残留
   let title = cleanTitle(String(data.title || "").slice(0, 60));
 
+  // 分类兜底纠正：基于物品名称关键词重新判断
+  let category = pickEnum(data.category, CATEGORIES, "其他");
+  category = recategorizeByTitle(title, originalText, category);
+
   // 地点结构化
   const district = pickEnum(data.district, Object.keys(STREET_DATA), "");
   const street = String(data.street || "").slice(0, 40);
@@ -232,7 +258,7 @@ function normalizeStructured(value, originalText) {
   return {
     type,
     title,
-    category: pickEnum(data.category, CATEGORIES, "其他"),
+    category,
     color: pickEnum(data.color, COLORS, "黑色"),
     location: String(data.location || "未知地点").slice(0, 60),
     district,
@@ -249,19 +275,32 @@ function normalizeStructured(value, originalText) {
 function cleanTitle(title) {
   if (!title) return "";
   // 去除颜色前缀（仅当颜色词后还有其他内容时）
-  const colorPrefixes = ["黑色", "白色", "红色", "蓝色", "绿色", "黄色", "紫色", "橙色", "粉色", "灰色", "棕色", "银色", "金色", "彩色", "透明", "米色", "青色"];
-  for (const cp of colorPrefixes) {
-    if (title.startsWith(cp) && title.length > cp.length) {
+  const colorWords = [
+    "黑色", "白色", "红色", "蓝色", "绿色", "黄色", "紫色", "橙色", "粉色", "灰色", "棕色", "银色", "金色", "彩色", "透明", "米色", "青色",
+    "深蓝", "浅蓝", "深灰", "浅灰", "玫红", "藏青", "香槟", "咖啡", "墨绿", "天蓝", "宝蓝", "深蓝色", "浅蓝色", "深灰色", "浅灰色", "玫红色", "藏青色", "香槟色", "咖啡色", "墨绿色", "天蓝色", "宝蓝色",
+  ];
+  for (const cp of colorWords) {
+    if (title.startsWith(cp) && title.length > cp.length + 1) {
       title = title.slice(cp.length);
       break;
     }
   }
-  // 去除动作词前缀
-  title = title.replace(/^(?:丢了|捡到|拾到|捡了|拾了|发现|看到一个|掉了|不见|找到|在|一个|個|了|和|的|是|有|个|一)\s*/, "");
-  // 去除可能残留的"色"字
+  // 去除动作词和量词前缀（按长度降序，优先匹配更长的前缀）
+  const prefixes = [
+    "我的", "丢了", "捡到", "拾到", "捡了", "拾了", "发现", "看到一个", "看到一个", "掉了", "不见", "找到", "一个是",
+    "在", "一个", "個", "了", "和", "的", "是", "有", "个", "一",
+  ];
+  for (const prefix of prefixes) {
+    if (title.startsWith(prefix) && title.length > prefix.length + 1) {
+      title = title.slice(prefix.length);
+      break;
+    }
+  }
+  // 去除可能残留的"色"字开头
   title = title.replace(/^[色]\s*/, "");
-  // 去除首尾空白和常见连接词
-  return title.trim().replace(/^(?:的|是|有|个|一|了|和)\s*/, "").trim();
+  // 再去除可能残存的连接词
+  title = title.trim().replace(/^(?:的|是|有|个|了|和)\s*/, "").trim();
+  return title;
 }
 
 function pickEnum(value, allow, fallback) {
@@ -270,6 +309,25 @@ function pickEnum(value, allow, fallback) {
   // 部分匹配（例如 "电子产品" → "电子设备"）
   const found = allow.find((item) => str.includes(item) || item.includes(str));
   return found || fallback;
+}
+
+// 基于物品标题关键词的二次分类纠正
+function recategorizeByTitle(title, originalText, currentCategory) {
+  const combined = `${title} ${originalText}`.toLowerCase();
+  // 高置信度关键词 → 强制分类
+  const rules = [
+    { keywords: ["校园卡套", "校园卡", "学生证", "身份证", "驾驶证", "护照", "门禁卡", "银行卡", "社保卡"], category: "证件" },
+    { keywords: ["手机", "耳机", "耳塞", "airpods", "AirPods", "电脑", "笔记本", "平板", "ipad", "iPad", "充电器", "充电宝", "数据线", "u盘", "U盘", "蓝牙"], category: "电子设备" },
+    { keywords: ["伞", "雨伞", "水杯", "保温杯", "口红", "化妆", "镜子", "梳子", "围巾", "帽子", "手套"], category: "生活用品" },
+    { keywords: ["书", "课本", "教材", "笔", "本子", "文具", "笔记", "试卷", "计算器"], category: "学习用品" },
+    { keywords: ["钥匙", "钥匙扣"], category: "钥匙" },
+    { keywords: ["背包", "书包", "双肩包", "钱包", "手提包", "行李箱", "挎包", "单肩包", "公文包"], category: "箱包" },
+    { keywords: ["手表", "项链", "戒指", "手镯", "耳环", "首饰", "金", "玉"], category: "贵重物品" },
+  ];
+  for (const { keywords, category } of rules) {
+    if (keywords.some((kw) => combined.includes(kw))) return category;
+  }
+  return currentCategory;
 }
 
 function normalizeTime(value) {
