@@ -98,6 +98,7 @@ function decodeJwtPayload(token) {
 // ============== 全局状态 ==============
 let records = [];
 let activeFilter = "all";
+let activeCategory = "all"; // 当前选中的类别筛选
 let uploadedFeature = null;
 let uploadedImageData = "";
 let uploadedImageUrl = ""; // Supabase Storage URL
@@ -190,7 +191,7 @@ function bindEvents() {
       document.querySelectorAll(".filter-group [data-filter]").forEach((c) => c.classList.remove("is-active"));
       btn.classList.add("is-active");
       // 类型切换时，重置类别筛选为"全部"并动态更新可选项
-      if (els.categoryFilter) els.categoryFilter.value = "all";
+      activeCategory = "all";
       document.querySelectorAll("#filterChips .filter-chip").forEach((c) => c.classList.remove("is-active"));
       const allChip = document.querySelector('#filterChips .filter-chip[data-filter="all"]');
       if (allChip) allChip.classList.add("is-active");
@@ -203,8 +204,7 @@ function bindEvents() {
   document.querySelectorAll("#filterChips .filter-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       const val = chip.dataset.filter;
-      // 同步到隐藏的 select
-      if (els.categoryFilter) els.categoryFilter.value = val;
+      activeCategory = val;
       // 更新 chip 视觉状态
       document.querySelectorAll("#filterChips .filter-chip").forEach((c) => c.classList.remove("is-active"));
       chip.classList.add("is-active");
@@ -213,7 +213,6 @@ function bindEvents() {
   });
 
   on(els.searchInput, "input", renderItemList);
-  if (els.categoryFilter) on(els.categoryFilter, "change", renderItemList);
   on(els.filterDistrict, "change", () => {
     localStorage.setItem('lastDistrict', els.filterDistrict.value);
     renderLocationStreets();
@@ -662,7 +661,7 @@ function renderCategoryChips() {
   const allCategories = ["全部", ...sortedCategories];
 
   // 当前选中的类别
-  const currentCategory = els.categoryFilter?.value || "all";
+  const currentCategory = activeCategory;
 
   // 重新渲染 chips
   container.innerHTML = allCategories.map((cat) => {
@@ -675,7 +674,7 @@ function renderCategoryChips() {
   container.querySelectorAll(".filter-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       const val = chip.dataset.filter;
-      if (els.categoryFilter) els.categoryFilter.value = val;
+      activeCategory = val;
       container.querySelectorAll(".filter-chip").forEach((c) => c.classList.remove("is-active"));
       chip.classList.add("is-active");
       renderItemList();
@@ -685,7 +684,7 @@ function renderCategoryChips() {
 
 function renderItemList() {
   const query = normalizeText(els.searchInput.value);
-  const category = els.categoryFilter?.value || "all";
+  const category = activeCategory;
   const district = els.filterDistrict?.value || "all";
   const street = els.filterStreet?.value || "all";
   let list = records.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -713,7 +712,6 @@ function renderActiveFilters() {
   const container = document.getElementById("activeFilters");
   if (!container) return;
   const tags = [];
-  const category = els.categoryFilter?.value || "all";
   const district = els.filterDistrict?.value || "all";
   const street = els.filterStreet?.value || "all";
 
@@ -723,7 +721,7 @@ function renderActiveFilters() {
     tags.push({ type: "type", label: activeFilter, text: `类型：${typeMap[activeFilter] || activeFilter}` });
   }
 
-  if (category !== "all") tags.push({ type: "category", label: category, text: `类别：${category}` });
+  if (activeCategory !== "all") tags.push({ type: "category", label: activeCategory, text: `类别：${activeCategory}` });
   if (district !== "all") tags.push({ type: "district", label: district, text: `📍 ${district}` });
   if (street !== "all") tags.push({ type: "street", label: street, text: `🏘️ ${street}` });
   if (tags.length === 0) { container.innerHTML = ""; return; }
@@ -779,7 +777,7 @@ function renderInspector() {
 
 // 从 Inspector 标签设置类别筛选
 function setCategoryFilter(category) {
-  if (els.categoryFilter) els.categoryFilter.value = category;
+  activeCategory = category;
   // 同步 chip 状态（针对动态渲染的 filter-chips）
   const chipsContainer = document.getElementById("filterChips");
   if (chipsContainer) {
@@ -809,10 +807,10 @@ function clearFilter(type) {
     const allBtn = document.querySelector('.filter-group [data-filter="all"]');
     if (allBtn) allBtn.classList.add("is-active");
     // 重置类别筛选并重新渲染类别选项
-    if (els.categoryFilter) els.categoryFilter.value = "all";
+    activeCategory = "all";
     renderCategoryChips();
   }
-  if (type === "category" && els.categoryFilter) els.categoryFilter.value = "all";
+  if (type === "category") activeCategory = "all";
   if (type === "district" && els.filterDistrict) { els.filterDistrict.value = "all"; renderLocationStreets(); }
   if (type === "street" && els.filterStreet) els.filterStreet.value = "all";
   // 同步 chip 状态
