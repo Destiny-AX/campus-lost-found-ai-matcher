@@ -1536,27 +1536,21 @@ async function handleDelete(req, res) {
     }
     const rows = await checkResponse.json();
     const owner = rows[0]?.owner_id;
-    if (owner && owner !== current.sub) {
-      sendJson(res, 403, { error: "只能删除自己发布的记录" });
+    // owner_id 为空时禁止删除，避免无主记录被任意用户删除
+    if (!owner) {
+      sendJson(res, 403, { error: "该记录无所有者，无法删除" });
       return;
     }
-    if (!owner) {
-      const memRow = memoryRecords.get(id);
-      if (memRow) { memoryRecords.delete(id); sendJson(res, 200, { ok: true, fallback: true }); return; }
-      sendJson(res, 403, { error: "记录不存在或无法验证所有权" });
+    if (owner !== current.sub && current.role !== "admin") {
+      sendJson(res, 403, { error: "只能删除自己发布的记录" });
       return;
     }
     await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
     memoryRecords.delete(id);
     sendJson(res, 200, { ok: true });
   } catch (error) {
-    const memRow = memoryRecords.get(id);
-    if (memRow && memRow.owner_id && memRow.owner_id !== current.sub) {
-      sendJson(res, 403, { error: "只能删除自己发布的记录" });
-      return;
-    }
-    memoryRecords.delete(id);
-    sendJson(res, 200, { ok: true, fallback: true });
+    // 数据库异常时不再回退到内存删除，避免数据不一致
+    sendJson(res, 500, { ok: false, error: "删除失败，请稍后重试" });
   }
 }
 
@@ -1619,7 +1613,12 @@ async function handleUpdate(req, res) {
     if (checkResponse.ok) {
       const rows = await checkResponse.json();
       const owner = rows[0]?.owner_id;
-      if (owner && owner !== current.sub && current.role !== "admin") {
+      // owner_id 为空时禁止更新，避免无主记录被任意用户篡改
+      if (!owner) {
+        sendJson(res, 403, { error: "该记录无所有者，无法更新" });
+        return;
+      }
+      if (owner !== current.sub && current.role !== "admin") {
         sendJson(res, 403, { error: "只能更新自己发布的记录" });
         return;
       }
@@ -1639,7 +1638,8 @@ async function handleUpdate(req, res) {
     if (memRow) { Object.assign(memRow, patch); memoryRecords.set(id, memRow); }
     sendJson(res, 200, { ok: true });
   } catch (error) {
-    sendJson(res, 200, { ok: true, fallback: true });
+    // 数据库异常时不再假装成功，避免数据不一致
+    sendJson(res, 500, { ok: false, error: "更新失败，请稍后重试" });
   }
 }
 
@@ -1897,8 +1897,13 @@ async function handleClaimRequest(req, res) {
     const hasQuestion = !!(targetRecord.claim_question || "").trim();
     if (!answer.trim()) { sendJson(res, 400, { error: hasQuestion ? "请回答认领问题" : "请填写物品特征说明" }); return; }
 
+    // 检查是否已有 pending 申请，避免重复申请
+    const existClaimResp = await supabaseFetch(config, `/rest/v1/shiyun_claim_requests?record_id=eq.${encodeURIComponent(recordId)}&claimant_id=eq.${encodeURIComponent(current.sub)}&status=eq.pending&limit=1`, { method: "GET" });
+    const existClaimRows = await existClaimResp.json();
+    if (existClaimRows.length > 0) { sendJson(res, 400, { error: "你已提交过认领申请，请等待审核" }); return; }
+
     // 创建认领申请
-    const claimId = `claim_${Date.now()}`;
+    const claimId = `claim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await supabaseFetch(config, `/rest/v1/shiyun_claim_requests`, {
       method: "POST", headers: { Prefer: "return=representation" },
       body: JSON.stringify({ id: claimId, record_id: recordId, claimant_id: current.sub, answer, status: "pending" }),
@@ -1937,6 +1942,8 @@ async function handleReviewClaim(req, res) {
     const claimRows = await claimResp.json();
     const claim = claimRows[0];
     if (!claim) { sendJson(res, 404, { error: "认领申请不存在" }); return; }
+    // 已审核过的申请不可重复审核
+    if (claim.status !== "pending") { sendJson(res, 400, { error: "该申请已审核过" }); return; }
 
     // 获取记录信息并校验权限：只有记录发布者才能审核
     const recResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(claim.record_id)}&select=owner_id,contact&limit=1`, { method: "GET" });
@@ -2003,13 +2010,15 @@ async function handleMarkReturned(req, res) {
     const existResp = await supabaseFetch(config, `/rest/v1/shiyun_resolved_records?record_id=eq.${encodeURIComponent(recordId)}&limit=1`, { method: "GET" });
     const existRows = await existResp.json();
     if (existRows.length > 0) {
+      // 已标记过归还则拒绝重复操作
+      if (existRows[0].finder_confirmed) { sendJson(res, 400, { error: "已标记过归还，请等待失主确认" }); return; }
       // 更新 finder_confirmed
       await supabaseFetch(config, `/rest/v1/shiyun_resolved_records?id=eq.${encodeURIComponent(existRows[0].id)}`, {
         method: "PATCH", body: JSON.stringify({ finder_confirmed: true, finder_confirmed_at: new Date().toISOString() }),
       });
     } else {
       // 创建 resolved_records
-      const resolvedId = `resolved_${Date.now()}`;
+      const resolvedId = `resolved_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await supabaseFetch(config, `/rest/v1/shiyun_resolved_records`, {
         method: "POST", headers: { Prefer: "return=representation" },
         body: JSON.stringify({
@@ -2071,16 +2080,23 @@ async function handleConfirmReceived(req, res) {
       method: "PATCH", body: JSON.stringify({ status: "已找回" }),
     });
 
-    // 发放积分（如果尚未发放）
+    // 发放积分（使用条件更新保证幂等，避免并发重复发放）
     if (!resolved.credit_awarded) {
-      // 给拾到者 +10
-      await awardCredit(config, resolved.finder_id, 10, "归还物品奖励", recordId);
-      // 给失主 +5
-      await awardCredit(config, resolved.owner_id, 5, "找回物品奖励", recordId);
-      // 标记已发放
-      await supabaseFetch(config, `/rest/v1/shiyun_resolved_records?id=eq.${encodeURIComponent(resolved.id)}`, {
-        method: "PATCH", body: JSON.stringify({ credit_awarded: true }),
+      // 先用条件更新标记 credit_awarded=true，只有成功更新才发放积分
+      const markResp = await supabaseFetch(config, `/rest/v1/shiyun_resolved_records?id=eq.${encodeURIComponent(resolved.id)}&credit_awarded=eq.false`, {
+        method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ credit_awarded: true }),
       });
+      let awarded = false;
+      if (markResp.ok) {
+        const markRows = await markResp.json();
+        awarded = Array.isArray(markRows) && markRows.length > 0;
+      }
+      if (awarded) {
+        // 给拾到者 +10
+        await awardCredit(config, resolved.finder_id, 10, "归还物品奖励", recordId);
+        // 给失主 +5
+        await awardCredit(config, resolved.owner_id, 5, "找回物品奖励", recordId);
+      }
     }
 
     // 通知双方
@@ -2105,11 +2121,11 @@ async function handleConfirmReceived(req, res) {
 
 // 辅助函数：发放积分
 async function awardCredit(config, userId, delta, description, recordId) {
-  // 创建信用日志
+  // 创建信用日志（使用 UUID 避免高并发下时间戳冲突）
   await supabaseFetch(config, `/rest/v1/shiyun_credit_logs`, {
     method: "POST",
     body: JSON.stringify({
-      id: `credit_${Date.now()}_${userId}`, user_id: userId, action: description, delta, description,
+      id: generateUuid(), user_id: userId, action: description, delta, description,
     }),
   });
   // 更新用户积分
@@ -2174,10 +2190,12 @@ async function handleSubmitReview(req, res) {
 
   try {
     // 获取记录
-    const recResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id,claimed_by&limit=1`, { method: "GET" });
+    const recResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id,claimed_by,status&limit=1`, { method: "GET" });
     const recRows = await recResp.json();
     const record = recRows[0];
     if (!record) { sendJson(res, 404, { error: "记录不存在" }); return; }
+    // 只有已找回的记录可以评价，避免未完成流程刷信用分
+    if (record.status !== "已找回") { sendJson(res, 400, { error: "只有已找回的记录可以评价" }); return; }
 
     const isOwner = record.owner_id === current.sub;
     const isClaimant = record.claimed_by === current.sub;
@@ -2191,8 +2209,8 @@ async function handleSubmitReview(req, res) {
     const existRows = await existResp.json();
     if (existRows.length > 0) { sendJson(res, 400, { error: "已评价过该记录" }); return; }
 
-    // 创建评价
-    const reviewId = `review_${Date.now()}`;
+    // 创建评价（使用 UUID 避免高并发下时间戳冲突）
+    const reviewId = generateUuid();
     await supabaseFetch(config, `/rest/v1/shiyun_reviews`, {
       method: "POST", headers: { Prefer: "return=representation" },
       body: JSON.stringify({ id: reviewId, record_id: recordId, from_user_id: current.sub, to_user_id: toUserId, rating, comment }),
@@ -2230,7 +2248,7 @@ async function handleReport(req, res) {
   const body = await readJsonBody(req);
   const recordIdVal = validateString(body.record_id, { required: true, name: "记录ID" });
   if (!recordIdVal.ok) { sendJson(res, 400, { error: recordIdVal.error }); return; }
-  const reasonVal = validateString(body.reason, { maxLength: 500, name: "举报原因" });
+  const reasonVal = validateString(body.reason, { required: true, minLength: 5, maxLength: 500, name: "举报原因" });
   if (!reasonVal.ok) { sendJson(res, 400, { error: reasonVal.error }); return; }
   const recordId = recordIdVal.value;
   const reason = reasonVal.value;
@@ -2247,12 +2265,13 @@ async function handleReport(req, res) {
     // 获取记录发布者
     const recResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id&limit=1`, { method: "GET" });
     const recRows = await recResp.json();
+    if (!recRows[0]) { sendJson(res, 404, { error: "记录不存在" }); return; }
     const ownerId = recRows[0]?.owner_id;
 
-    // 记录举报
+    // 记录举报（使用 UUID 避免高并发下时间戳冲突）
     await supabaseFetch(config, `/rest/v1/shiyun_reports`, {
       method: "POST",
-      body: JSON.stringify({ id: `report_${Date.now()}`, record_id: recordId, reporter_id: current.sub, reason }),
+      body: JSON.stringify({ id: generateUuid(), record_id: recordId, reporter_id: current.sub, reason }),
     });
 
     if (ownerId) {

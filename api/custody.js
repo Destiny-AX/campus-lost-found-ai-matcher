@@ -94,16 +94,19 @@ async function handleDeposit(req, res) {
   const config = getSupabaseConfig();
   if (!config) {
     const memRow = memoryRecords.get(recordId);
-    if (memRow) {
-      if (memRow.owner_id && memRow.owner_id !== current.sub) {
-        sendJson(res, 403, { error: "只能寄存自己发布的记录" });
-        return;
-      }
-      memRow.custody_point_id = pointId;
-      memRow.pickup_code = pickupCode;
-      memRow.item_status = "custody";
-      memoryRecords.set(recordId, memRow);
+    if (!memRow) {
+      sendJson(res, 404, { error: "记录不存在" });
+      return;
     }
+    // owner_id 为空时禁止寄存，避免无主记录被任意操作
+    if (!memRow.owner_id || memRow.owner_id !== current.sub) {
+      sendJson(res, 403, { error: "只能寄存自己发布的记录" });
+      return;
+    }
+    memRow.custody_point_id = pointId;
+    memRow.pickup_code = pickupCode;
+    memRow.item_status = "custody";
+    memoryRecords.set(recordId, memRow);
     sendJson(res, 200, {
       ok: true,
       pickup_code: pickupCode,
@@ -119,13 +122,19 @@ async function handleDeposit(req, res) {
       `/rest/v1/${RECORDS_TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id&limit=1`,
       { method: "GET" },
     );
-    if (checkResponse.ok) {
-      const rows = await checkResponse.json();
-      const owner = rows[0]?.owner_id;
-      if (owner && owner !== current.sub) {
-        sendJson(res, 403, { error: "只能寄存自己发布的记录" });
-        return;
-      }
+    if (!checkResponse.ok) {
+      sendJson(res, 500, { error: "校验记录失败" });
+      return;
+    }
+    const rows = await checkResponse.json();
+    const owner = rows[0]?.owner_id;
+    if (!owner) {
+      sendJson(res, 403, { error: "该记录无所有者，无法寄存" });
+      return;
+    }
+    if (owner !== current.sub) {
+      sendJson(res, 403, { error: "只能寄存自己发布的记录" });
+      return;
     }
     const patchResponse = await supabaseFetch(
       config,
@@ -178,22 +187,33 @@ async function handlePickup(req, res) {
   const config = getSupabaseConfig();
   if (!config) {
     const memRow = memoryRecords.get(recordId);
-    if (memRow && memRow.pickup_code) {
-      // 权限校验：只有发布者或认领者才能取件
-      if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
-        sendJson(res, 403, { error: "只有发布者或认领者才能取件" });
-        return;
-      }
-      const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
-      const submitted = submittedCode.replace(/-/g, "");
-      if (expected !== submitted) {
-        sendJson(res, 400, { error: "取件码不正确" });
-        return;
-      }
-      memRow.item_status = "picked";
-      memRow.status = "已归还";
-      memoryRecords.set(recordId, memRow);
+    if (!memRow) {
+      sendJson(res, 404, { error: "记录不存在" });
+      return;
     }
+    if (!memRow.pickup_code) {
+      sendJson(res, 400, { error: "该记录尚未寄存" });
+      return;
+    }
+    // 权限校验：只有发布者或认领者才能取件
+    if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
+      sendJson(res, 403, { error: "只有发布者或认领者才能取件" });
+      return;
+    }
+    // 状态校验：只有 custody 状态才能取件
+    if (memRow.item_status !== "custody") {
+      sendJson(res, 400, { error: "该物品当前状态不允许取件" });
+      return;
+    }
+    const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
+    const submitted = submittedCode.replace(/-/g, "");
+    if (expected !== submitted) {
+      sendJson(res, 400, { error: "取件码不正确" });
+      return;
+    }
+    memRow.item_status = "picked";
+    memRow.status = "已归还";
+    memoryRecords.set(recordId, memRow);
     sendJson(res, 200, { ok: true });
     return;
   }

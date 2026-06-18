@@ -780,9 +780,13 @@ function renderInspector() {
   if (topTags.length === 0) {
     tagsEl.innerHTML = `<p class="inspector-placeholder">暂无数据</p>`;
   } else {
-    tagsEl.innerHTML = topTags.map(tag => `
-      <span class="inspector-tag" onclick="setCategoryFilter('${escapeHtml(tag)}')">${escapeHtml(tag)}</span>
-    `).join("");
+    // 使用 data-* 属性 + 事件委托，避免内联 onclick 的 XSS 风险
+    tagsEl.innerHTML = topTags.map(tag =>
+      `<span class="inspector-tag" data-category="${escapeHtml(tag)}">${escapeHtml(tag)}</span>`
+    ).join("");
+    tagsEl.querySelectorAll(".inspector-tag").forEach(el => {
+      el.addEventListener("click", () => setCategoryFilter(el.dataset.category));
+    });
   }
 }
 
@@ -1380,7 +1384,7 @@ function renderInstitutionContact(record) {
         record.location?.includes(inst.name)) {
       return `<div class="institution-info">
         <p><strong>保管机构：</strong>${escapeHtml(inst.name)} ${inst.verified ? '<span class="verified-badge">✓ 官方认证</span>' : ''}</p>
-        <p><strong>联系电话：</strong><a href="tel:${inst.contact}">${inst.contact}</a></p>
+        <p><strong>联系电话：</strong><a href="tel:${escapeHtml(inst.contact)}">${escapeHtml(inst.contact)}</a></p>
         <p><strong>地址：</strong>${escapeHtml(inst.address)}</p>
       </div>`;
     }
@@ -1463,15 +1467,22 @@ function startNotifyPoll() {
   notifyTimer = setInterval(pollNotifications, NOTIFY_POLL_INTERVAL);
 }
 
+// 轮询锁，防止 setInterval 导致的并发轮询竞态
+let notifyPolling = false;
 async function pollNotifications() {
   if (!currentUser) {
     updateNotifyBadge(0);
     return;
   }
+  // 避免并发轮询：上一次还没完成就跳过本次
+  if (notifyPolling) return;
+  notifyPolling = true;
   try {
     const response = await fetch(`/api/notify?action=poll&since=${encodeURIComponent(notifyLastPoll)}`, { headers: authHeaders() });
     if (!response.ok) {
-      updateNotifyBadge(0);
+      // 失败时保留原有未读计数，不清零
+      const existingUnread = notifications.filter((n) => !n.is_read).length;
+      updateNotifyBadge(existingUnread);
       return;
     }
     const payload = await response.json();
@@ -1489,7 +1500,11 @@ async function pollNotifications() {
     notifyLastPoll = newNotifs[0]?.created_at || new Date().toISOString();
   } catch (e) {
     console.error("[pollNotifications] 轮询失败:", e);
-    updateNotifyBadge(0);
+    // 失败时保留原有未读计数，不清零
+    const existingUnread = notifications.filter((n) => !n.is_read).length;
+    updateNotifyBadge(existingUnread);
+  } finally {
+    notifyPolling = false;
   }
 }
 

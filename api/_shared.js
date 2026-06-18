@@ -82,7 +82,8 @@ function base64UrlDecode(value) {
 function signJwt(payload, expiresInSeconds = 60 * 60 * 24 * 30) {
   const header = { alg: "HS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
-  const fullPayload = { iat: now, exp: now + expiresInSeconds, ...payload };
+  // iat/exp 放在后面，防止 payload 中的 exp 字段覆盖过期时间
+  const fullPayload = { ...payload, iat: now, exp: now + expiresInSeconds };
   const headerSeg = base64UrlEncode(JSON.stringify(header));
   const payloadSeg = base64UrlEncode(JSON.stringify(fullPayload));
   const signingInput = `${headerSeg}.${payloadSeg}`;
@@ -98,7 +99,10 @@ function verifyJwt(token) {
   const expected = base64UrlEncode(
     crypto.createHmac("sha256", getJwtSecret()).update(`${headerSeg}.${payloadSeg}`).digest(),
   );
-  if (expected !== signatureSeg) return null;
+  // 使用常量时间比较签名，防止时序攻击
+  const expectedBuf = Buffer.from(expected);
+  const sigBuf = Buffer.from(signatureSeg);
+  if (expectedBuf.length !== sigBuf.length || !crypto.timingSafeEqual(expectedBuf, sigBuf)) return null;
   try {
     const payload = JSON.parse(base64UrlDecode(payloadSeg).toString("utf8"));
     if (payload.exp && Date.now() / 1000 > payload.exp) return null;
@@ -235,6 +239,11 @@ function generatePickupCode(length = 6) {
   return `${out.slice(0, 2)}-${out.slice(2)}`;
 }
 
+// 生成标准 UUID（通知表主键为 uuid 类型，需使用合法 UUID）
+function generateUuid() {
+  return crypto.randomUUID();
+}
+
 module.exports = {
   readEnv,
   getSupabaseConfig,
@@ -248,6 +257,7 @@ module.exports = {
   sendJson,
   safeErrorText,
   generatePickupCode,
+  generateUuid,
   validateString,
   validateInt,
   validateArray,

@@ -3,7 +3,7 @@
 // 图片上传 API：接收 Base64 图片，上传到 Supabase Storage，返回公开 URL
 // POST /api/upload-image
 
-const { getSupabaseConfig, readJsonBody, sendJson, safeErrorText } = require("./_shared");
+const { getSupabaseConfig, readJsonBody, sendJson, safeErrorText, getCurrentUser } = require("./_shared");
 const https = require("https");
 const crypto = require("crypto");
 
@@ -13,6 +13,13 @@ const handler = async function handler(req, res) {
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+
+    // 鉴权：必须登录才能上传图片
+    const current = getCurrentUser(req);
+    if (!current) {
+      sendJson(res, 401, { error: "请先登录" });
       return;
     }
 

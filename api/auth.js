@@ -145,6 +145,12 @@ async function handleVerifyIdentity(req, res) {
     return;
   }
   const user = await fetchUserById(current.sub);
+  // 幂等校验：已实名认证的用户不再重复发放经验
+  // 同时检查数据库中的 is_verified 和 JWT 中的 verified，防止 fetchUserById 失败时绕过校验
+  if (user?.is_verified || current.verified) {
+    sendJson(res, 200, { alreadyVerified: true, user: user || { id: current.sub, nickname: current.nickname, is_verified: true }, unlocked: { badge: null, expDelta: 0, levelUp: false } });
+    return;
+  }
   const oldBadges = user?.badges || ["🌱 新手上路"];
   const newBadges = oldBadges.includes("✅ 实名认证") ? oldBadges : [...oldBadges, "✅ 实名认证"];
   const oldExp = user?.exp || 0;

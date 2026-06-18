@@ -58,7 +58,8 @@ async function handlePoll(req, res, url) {
     }
     let query = `/rest/v1/${NOTIFICATIONS_TABLE}?order=created_at.desc&limit=50`;
     query += `&user_id=eq.${encodeURIComponent(userId)}`;
-    query += `&created_at.gt.${encodeURIComponent(since)}`;
+    // PostgREST 过滤语法为 column=operator.value，此处修正为 created_at=gt.xxx
+    query += `&created_at=gt.${encodeURIComponent(since)}`;
     const response = await supabaseFetch(config, query, { method: "GET" });
     if (!response.ok) {
       console.error(`[notify/poll] 查询失败: ${response.status}`);

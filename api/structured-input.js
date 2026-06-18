@@ -9,6 +9,7 @@ const {
   readJsonBody,
   sendJson,
   safeErrorText,
+  getCurrentUser,
 } = require("./_shared");
 
 // 文本模型，与视觉模型分开（视觉模型也能跑文本但成本更高）
@@ -47,77 +48,89 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const apiKey = getSiliconFlowApiKey();
-  const body = await readJsonBody(req);
-  const text = String(body.text || "").trim();
-  if (!text) {
-    sendJson(res, 400, { error: "text 不能为空" });
+  // 鉴权：必须登录才能调用 AI 提取，避免匿名滥用付费 API
+  const current = getCurrentUser(req);
+  if (!current) {
+    sendJson(res, 401, { error: "请先登录" });
     return;
   }
 
-  // 没有 API Key 时走本地启发式 fallback，保证 demo 可用
-  if (!apiKey) {
-    sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic" });
-    return;
-  }
-
-  const prompt = buildPrompt(text);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  let response;
   try {
-    response = await fetch(SILICON_FLOW_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: TEXT_MODEL,
-        messages: [
-          { role: "system", content: "你是失物招领信息结构化提取助手，必须严格输出 JSON。" },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: MAX_TOKENS,
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
+    const apiKey = getSiliconFlowApiKey();
+    const body = await readJsonBody(req);
+    const text = String(body.text || "").trim();
+    if (!text) {
+      sendJson(res, 400, { error: "text 不能为空" });
+      return;
+    }
+
+    // 没有 API Key 时走本地启发式 fallback，保证 demo 可用
+    if (!apiKey) {
+      sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic" });
+      return;
+    }
+
+    const prompt = buildPrompt(text);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetch(SILICON_FLOW_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: TEXT_MODEL,
+          messages: [
+            { role: "system", content: "你是失物招领信息结构化提取助手，必须严格输出 JSON。" },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.1,
+          max_tokens: MAX_TOKENS,
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      sendJson(res, 200, {
+        structured: heuristicExtract(text),
+        source: "heuristic_fallback",
+        detail: safeErrorText(error.message),
+      });
+      return;
+    }
     clearTimeout(timeout);
-    sendJson(res, 200, {
-      structured: heuristicExtract(text),
-      source: "heuristic_fallback",
-      detail: safeErrorText(error.message),
-    });
-    return;
-  }
-  clearTimeout(timeout);
 
-  const raw = await response.text();
-  if (!response.ok) {
-    sendJson(res, 200, {
-      structured: heuristicExtract(text),
-      source: "heuristic_fallback",
-      detail: safeErrorText(raw),
-    });
-    return;
-  }
+    const raw = await response.text();
+    if (!response.ok) {
+      sendJson(res, 200, {
+        structured: heuristicExtract(text),
+        source: "heuristic_fallback",
+        detail: safeErrorText(raw),
+      });
+      return;
+    }
 
-  try {
-    const payload = JSON.parse(raw);
-    const content = payload.choices?.[0]?.message?.content || "{}";
-    const structured = normalizeStructured(parsePossiblyFencedJson(content), text);
-    sendJson(res, 200, { structured, source: "ai" });
+    try {
+      const payload = JSON.parse(raw);
+      const content = payload.choices?.[0]?.message?.content || "{}";
+      const structured = normalizeStructured(parsePossiblyFencedJson(content), text);
+      sendJson(res, 200, { structured, source: "ai" });
+    } catch (error) {
+      sendJson(res, 200, {
+        structured: heuristicExtract(text),
+        source: "heuristic_fallback",
+        detail: safeErrorText(error.message),
+      });
+    }
   } catch (error) {
-    sendJson(res, 200, {
-      structured: heuristicExtract(text),
-      source: "heuristic_fallback",
-      detail: safeErrorText(error.message),
-    });
+    // 顶层异常兜底，避免未处理异常导致进程崩溃
+    sendJson(res, 500, { error: "结构化提取失败", detail: safeErrorText(error.message) });
   }
 };
 
