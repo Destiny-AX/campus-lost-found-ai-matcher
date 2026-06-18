@@ -161,7 +161,7 @@ function cacheElements() {
     "pickupDialog", "pickupForm", "closePickupBtn",
     "aiInput", "aiExtractBtn", "aiExtractHint",
     "itemStatusGroup", "custodyPicker", "custodyPointSelect", "claimQuestionGroup",
-    "notifyList", "markAllReadBtn", "notifyBadge", "notifyBadgeMobile",
+    "notifyList", "markAllReadBtn", "refreshNotifyBtn", "notifyBadge", "notifyBadgeMobile",
     "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
     "filterDistrict", "filterStreet",
     "filterDistrictInput", "filterDistrictList",
@@ -301,6 +301,11 @@ function bindEvents() {
 
   // 通知
   on(els.markAllReadBtn, "click", handleMarkAllRead);
+  on(els.refreshNotifyBtn, "click", async () => {
+    await pollNotifications();
+    renderNotifyList();
+    showToast("消息已刷新", "success");
+  });
 
   // 使用说明提示条关闭
   const closeInfoBannerBtn = document.querySelector('#closeInfoBanner');
@@ -357,6 +362,9 @@ function restoreAuth() {
     // 页面刷新恢复登录时，JWT的exp是过期时间戳，不能作为经验值使用
     // 经验值应从用户对象获取，此处先设为0，后续可通过/api/auth?action=me获取完整信息
     currentUser = { ...payload, exp: 0 };
+    // 切换/恢复用户后重置通知轮询起点，确保能拉取历史通知
+    notifyLastPoll = new Date(0).toISOString();
+    startNotifyPoll();
     updateAuthUI();
   } catch (e) { localStorage.removeItem(AUTH_TOKEN_KEY); autoLoginDemo(); }
 }
@@ -373,6 +381,9 @@ async function autoLoginDemo() {
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
     const jwtPayload = decodeJwtPayload(payload.token);
     currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
+    // 自动登录后重置通知轮询起点，避免使用上一会话的时间戳
+    notifyLastPoll = new Date(0).toISOString();
+    startNotifyPoll();
     updateAuthUI();
     renderAll();
   } catch (e) { updateAuthUI(); }
@@ -1193,24 +1204,47 @@ function openDetail(id) {
     ? `<div class="pickup-code-display"><strong>取件码：</strong><code>${record.pickup_code}</code><small>请将取件码后半部分告知失主</small></div>`
     : "";
 
-  // 认领区域：非发布者且设置了认领问题时显示
+  // 认领区域：仅招领帖、非发布者、待认领状态显示
   let claimSection = "";
-  if (!isOwn && record.claim_question && !record.claimed_by) {
-    claimSection = `<div class="claim-section">
-      <div class="claim-question">🔒 认领验证：${escapeHtml(record.claim_question)}</div>
-      <input class="claim-answer-input" id="claimAnswer" placeholder="请回答上述问题" />
-      <button class="primary-action" id="claimBtn" type="button">申请认领</button>
-    </div>`;
-  } else if (!isOwn && record.claimed_by) {
+  if (!currentUser) {
+    claimSection = `<div class="claim-section"><div class="claim-hint">登录后可申请认领或查看归还进度</div></div>`;
+  } else if (!isOwn && record.type === "found" && record.status === "待认领") {
+    const hasQuestion = !!record.claim_question;
+    const questionHtml = hasQuestion
+      ? `<div class="claim-question">🔒 认领验证：${escapeHtml(record.claim_question)}</div>`
+      : `<div class="claim-hint">请填写物品特征说明，便于发布者核实归属</div>`;
+    const inputHtml = `<input class="claim-answer-input" id="claimAnswer" placeholder="${hasQuestion ? "请回答上述问题" : "请描述物品特征以证明归属"}" />`;
+    claimSection = `<div class="claim-section">${questionHtml}${inputHtml}<button class="primary-action" id="claimBtn" type="button">申请认领</button></div>`;
+  } else if (!isOwn && record.type === "found" && (record.status === "已认领" || record.status === "已找回")) {
     claimSection = `<div class="claim-section"><div class="claim-question">✅ 该物品已被认领</div></div>`;
+  } else if (isOwn && record.type === "found" && record.status === "待认领") {
+    // 发布者视角：提示等待他人申请认领
+    claimSection = `<div class="claim-section"><div class="claim-hint">你是该招领帖发布者，等待失主申请认领后可在消息中心审核</div></div>`;
   }
+
+  // 示例记录提示（owner_id 为空表示示例数据）
+  const demoHint = !record.owner_id
+    ? `<div class="claim-section"><div class="claim-hint">💡 这是一条示例记录，实际发布后才能体验完整认领流程</div></div>`
+    : "";
 
   // 举报按钮
   const reportLink = !isOwn ? `<button class="report-link" id="reportBtn" type="button">举报该信息</button>` : "";
 
-  // 评价按钮（认领完成后显示）
+  // 找回确认按钮：招领帖发布者显示“确认已归还”，认领者显示“确认已收到”
+  let recoverySection = "";
+  if (record.status === "已认领" && currentUser) {
+    if (record.type === "found" && isOwnRecord(record)) {
+      recoverySection = `<button class="primary-action" id="markReturnedBtn" type="button">确认已归还</button>`;
+    } else if (record.is_claimed_by_me) {
+      recoverySection = `<button class="primary-action" id="confirmReceivedBtn" type="button">确认已收到</button>`;
+    }
+  } else if (record.status === "已找回") {
+    recoverySection = `<div class="resolved-banner">✅ 找回已完成</div>`;
+  }
+
+  // 评价按钮（认领/找回完成后，发布者或认领者可见）
   let reviewSection = "";
-  if (!isOwn && record.claimed_by && currentUser && (record.owner_id === currentUser.sub || record.claimed_by === currentUser.sub)) {
+  if (currentUser && (record.status === "已认领" || record.status === "已找回") && (isOwnRecord(record) || record.is_claimed_by_me)) {
     reviewSection = `<button class="ghost-button" id="reviewBtn" type="button">评价此次交易</button>`;
   }
 
@@ -1228,12 +1262,14 @@ function openDetail(id) {
         ${verifyPrompt}
         <p>${escapeHtml(record.description)}</p>
         ${claimSection}
+        ${demoHint}
         <div class="contact-section">
           <strong>联系方式：</strong>
           ${contactDisplay}
         </div>
         ${custodyInfo}${institutionInfo}${pickupInfo}
         ${ownActions || adminActionsDetail ? `<div class="card-actions">${ownActions}${adminActionsDetail}</div>` : ""}
+        ${recoverySection}
         ${reviewSection}
         <div style="text-align:right;margin-top:8px;">${reportLink}</div>
         ${renderSemanticBlock(record.semantic)}
@@ -1264,7 +1300,9 @@ function openDetail(id) {
   if (claimBtn) {
     claimBtn.addEventListener("click", () => {
       const answer = els.detailContent.querySelector("#claimAnswer")?.value?.trim();
-      if (!answer) { showToast("请回答问题", "error"); return; }
+      const hasQuestion = !!record.claim_question;
+      if (hasQuestion && !answer) { showToast("请回答问题", "error"); return; }
+      if (!hasQuestion && !answer) { showToast("请填写物品特征说明", "error"); return; }
       handleClaimRequest(record.id, answer);
     });
   }
@@ -1280,6 +1318,48 @@ function openDetail(id) {
   const reviewBtn = els.detailContent.querySelector("#reviewBtn");
   if (reviewBtn) {
     reviewBtn.addEventListener("click", () => openReviewDialog(record.id));
+  }
+
+  // 标记已归还
+  const markReturnedBtn = els.detailContent.querySelector("#markReturnedBtn");
+  if (markReturnedBtn) {
+    markReturnedBtn.addEventListener("click", async () => {
+      try {
+        const resp = await fetch("/api/records?action=mark-returned", {
+          method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ record_id: record.id }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast("已标记归还，等待失主确认", "success");
+          els.detailDialog.close();
+        } else {
+          showToast(data.error || "操作失败", "error");
+        }
+      } catch (e) { showToast("网络错误", "error"); }
+    });
+  }
+
+  // 确认已收到
+  const confirmReceivedBtn = els.detailContent.querySelector("#confirmReceivedBtn");
+  if (confirmReceivedBtn) {
+    confirmReceivedBtn.addEventListener("click", async () => {
+      if (!confirm("确认已收到物品？确认后将完成找回流程并发放积分。")) return;
+      try {
+        const resp = await fetch("/api/records?action=confirm-received", {
+          method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ record_id: record.id }),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          showToast("确认完成！积分已发放", "success");
+          els.detailDialog.close();
+          await loadRecords(); // 刷新列表
+        } else {
+          showToast(data.error || "操作失败", "error");
+        }
+      } catch (e) { showToast("网络错误", "error"); }
+    });
   }
 }
 
@@ -1332,7 +1412,7 @@ function renderSemanticBlock(semantic) {
 // ============== 消息中心 ==============
 function renderNotifyList() {
   if (!notifications.length) {
-    els.notifyList.innerHTML = `<div class="empty-state"><strong>暂无消息</strong><p>发布信息后，系统会自动推送匹配线索和动态通知</p></div>`;
+    els.notifyList.innerHTML = `<div class="empty-state"><strong>暂无消息</strong><p>当有用户申请认领、审核结果或归还确认时，会出现在这里。</p></div>`;
     return;
   }
   els.notifyList.innerHTML = notifications.map((n) => {
@@ -1399,14 +1479,16 @@ async function pollNotifications() {
     if (newNotifs.length) {
       const unread = newNotifs.filter((n) => !n.is_read);
       notifications = [...newNotifs, ...notifications].slice(0, 100);
-      notifyLastPoll = newNotifs[0]?.created_at || notifyLastPoll;
       updateNotifyBadge(unread.length);
       if (unread.length) showToast(`${unread.length} 条新消息`, "info");
     } else {
       const existingUnread = notifications.filter((n) => !n.is_read).length;
       updateNotifyBadge(existingUnread);
     }
-  } catch (e) { 
+    // 仅在请求成功并解析完毕后才推进时间戳，失败时保持不变避免丢通知
+    notifyLastPoll = newNotifs[0]?.created_at || new Date().toISOString();
+  } catch (e) {
+    console.error("[pollNotifications] 轮询失败:", e);
     updateNotifyBadge(0);
   }
 }
@@ -1737,7 +1819,16 @@ async function handlePublish(event) {
           // 显式保留经验值字段，防止后端返回的user对象中exp被JWT exp覆盖
           currentUser = { ...currentUser, ...expData.user, exp: expData.user.exp ?? currentUser.exp ?? 0 };
           if (expData.levelUp) {
-            showAchievementPopup("level_up", `升级啦！Lv.${expData.newLevel} ${LEVEL_TITLES[expData.newLevel] || "拾遗新手"}`);
+            const levelMsg = `升级啦！Lv.${expData.newLevel} ${LEVEL_TITLES[expData.newLevel] || "拾遗新手"}`;
+            showAchievementPopup("level_up", levelMsg);
+            // 同时写入消息中心，方便用户回看
+            try {
+              await fetch("/api/notify?action=push", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ type: "level_up", title: "升级啦", body: `恭喜${levelMsg}` }),
+              });
+            } catch (e) { /* 静默 */ }
           }
         }
         // 首次发布徽章
@@ -2420,6 +2511,14 @@ async function unlockBadge(badgeKey) {
       const BADGE_EMOJI = { first_publish: "📝", match_master: "🎯", helper: "🤝", streak7: "🔥", guardian: "🏆" };
       currentUser = { ...currentUser, badges: data.user?.badges || currentUser.badges };
       showAchievementPopup("badge", `解锁新徽章：${data.badgeLabel}`, BADGE_EMOJI[badgeKey] || "🏆");
+      // 同时写入消息中心，方便用户回看
+      try {
+        await fetch("/api/notify?action=push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ type: "badge_unlocked", title: "解锁新徽章", body: `恭喜获得：${data.badgeLabel}` }),
+        });
+      } catch (e) { /* 静默 */ }
     }
   } catch (e) { /* 静默 */ }
 }
