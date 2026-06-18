@@ -12,6 +12,7 @@ const {
   sendJson,
   getCurrentUser,
   safeErrorText,
+  generateUuid,
 } = require("./_shared");
 
 const NOTIFICATIONS_TABLE = "shiyun_notifications";
@@ -57,9 +58,10 @@ async function handlePoll(req, res, url) {
     }
     let query = `/rest/v1/${NOTIFICATIONS_TABLE}?order=created_at.desc&limit=50`;
     query += `&user_id=eq.${encodeURIComponent(userId)}`;
-    query += `&created_at=gt.${encodeURIComponent(since)}`;
+    query += `&created_at.gt.${encodeURIComponent(since)}`;
     const response = await supabaseFetch(config, query, { method: "GET" });
     if (!response.ok) {
+      console.error(`[notify/poll] 查询失败: ${response.status}`);
       const filtered = memoryNotifications.filter((n) => n.user_id === userId && n.created_at > since);
       sendJson(res, 200, { notifications: filtered.slice(-50), fallback: true });
       return;
@@ -129,7 +131,7 @@ async function handlePush(req, res) {
   }
 
   const notification = {
-    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateUuid(),
     user_id: current.sub,
     type,
     title,
@@ -147,7 +149,7 @@ async function handlePush(req, res) {
         body: JSON.stringify(notification),
       });
     } catch (error) {
-      // 静默失败，内存兜底
+      console.error("[notify/push] 写入通知失败:", error.message);
     }
   }
   if (memoryNotifications.length < 500) memoryNotifications.push(notification);
@@ -157,7 +159,7 @@ async function handlePush(req, res) {
 // 导出 pushNotification 供其他模块内部调用
 module.exports.pushNotification = async function pushNotification({ userId, type, title, body, relatedRecordId }) {
   const notification = {
-    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: generateUuid(),
     user_id: userId || "",
     type: type || "info",
     title: title || "",
@@ -174,7 +176,7 @@ module.exports.pushNotification = async function pushNotification({ userId, type
         body: JSON.stringify(notification),
       });
     } catch (error) {
-      // 静默
+      console.error("[notify/pushNotification] 写入通知失败:", error.message);
     }
   }
   if (memoryNotifications.length < 500) memoryNotifications.push(notification);
