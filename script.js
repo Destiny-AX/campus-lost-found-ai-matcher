@@ -509,7 +509,7 @@ async function handleAiExtract() {
   els.aiExtractBtn.querySelector(".ai-extract-text").textContent = "AI 正在分析...";
   try {
     const response = await fetch("/api/structured-input", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ text }),
     });
     const payload = await response.json();
@@ -615,13 +615,13 @@ async function fetchPersistedRecords() {
 
 async function loadCustodyPoints() {
   try {
-    const pointsResponse = await fetch("/api/custody?action=points");
+    const pointsResponse = await fetch("/api/custody?action=points", { headers: authHeaders() });
     if (pointsResponse.ok) {
       const pointsPayload = await pointsResponse.json();
       custodyPoints = pointsPayload.points || [];
     }
 
-    const instResponse = await fetch("/api/custody?action=institutions");
+    const instResponse = await fetch("/api/custody?action=institutions", { headers: authHeaders() });
     if (instResponse.ok) {
       const instPayload = await instResponse.json();
       institutions = instPayload.institutions || [];
@@ -1337,6 +1337,8 @@ function openDetail(id) {
         if (data.ok) {
           showToast("已标记归还，等待失主确认", "success");
           els.detailDialog.close();
+          await loadRecords();
+          renderAll();
         } else {
           showToast(data.error || "操作失败", "error");
         }
@@ -1358,7 +1360,8 @@ function openDetail(id) {
         if (data.ok) {
           showToast("确认完成！积分已发放", "success");
           els.detailDialog.close();
-          await loadRecords(); // 刷新列表
+          await loadRecords();
+          renderAll();
         } else {
           showToast(data.error || "操作失败", "error");
         }
@@ -1779,7 +1782,7 @@ async function handlePublish(event) {
     const newRecord = {
       id: `record-${Date.now()}`, type: data.type, title: data.title.trim(),
       category: data.category, color: data.color,
-      city: data.city || "上海市", district: data.district || "", street: data.street || "",
+      city: data.city || "北京市", district: data.district || "", street: data.street || "",
       detail_location: data.detail_location || "",
       location: locationParts.join(" ") || data.district || "",
       time: data.time, contact: data.contact.trim(), description: data.description.trim(),
@@ -1871,10 +1874,14 @@ async function handlePublish(event) {
     if (!bestMatch) bestMatch = getBestMatch(newRecord);
     if (bestMatch.score >= 75 && currentUser) {
       try {
-        await fetch("/api/notify?action=push", {
-          method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ user_id: currentUser.sub, type: "match_found", title: "发现高匹配线索", body: `您发布的"${newRecord.title}"与一条${bestMatch.record.type === "lost" ? "寻物" : "招领"}记录匹配度达 ${Math.round(bestMatch.score)}%`, related_record_id: bestMatch.record.id }),
-        });
+        // 获取完整匹配对象（含 record 字段）用于通知
+        const topMatch = getMatchesFor(newRecord)[0];
+        if (topMatch && topMatch.record) {
+          await fetch("/api/notify?action=push", {
+            method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+            body: JSON.stringify({ user_id: currentUser.sub, type: "match_found", title: "发现高匹配线索", body: `您发布的"${newRecord.title}"与一条${topMatch.record.type === "lost" ? "寻物" : "招领"}记录匹配度达 ${Math.round(bestMatch.score)}%`, related_record_id: topMatch.record.id }),
+          });
+        }
       } catch (e) { /* 静默 */ }
     }
   } finally { setSubmitLoading(false); }
@@ -2055,6 +2062,8 @@ function resetPublishForm() {
   els.featurePreview.innerHTML = "<strong>图像特征与语义识别</strong><p>上传图片后显示提取结果。</p>";
   els.itemStatusGroup.hidden = true;
   els.custodyPicker.hidden = true;
+  // 重置认领问题输入框的显示状态（form.reset 不会触发 change 事件）
+  if (els.claimQuestionGroup) els.claimQuestionGroup.hidden = true;
   els.aiInput.value = "";
   const submitBtn = els.publishForm.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.textContent = "发布";
@@ -2273,7 +2282,7 @@ function buildFallbackSemantic(record) {
 
 async function analyzeImageSemantics(imageData) {
   try {
-    const response = await fetch("/api/analyze-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageData }) });
+    const response = await fetch("/api/analyze-image", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ imageData }) });
     if (!response.ok) return null;
     return (await response.json()).semantic || null;
   } catch (e) { return null; }

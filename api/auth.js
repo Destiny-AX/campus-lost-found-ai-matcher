@@ -244,14 +244,15 @@ async function handleCheckStreak(req, res) {
     return;
   }
   const user = await fetchUserById(current.sub);
-  const today = new Date().toISOString().slice(0, 10);
+  // 使用北京时间（UTC+8）计算日期，避免凌晨登录时连续签到判断错误
+  const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
   const lastDate = user?.last_active_date || "";
   let streak = user?.streak_days || 0;
   if (lastDate === today) {
     sendJson(res, 200, { streak, today: true });
     return;
   }
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000 + 8 * 3600 * 1000).toISOString().slice(0, 10);
   if (lastDate === yesterday) {
     streak += 1;
   } else {

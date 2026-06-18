@@ -149,9 +149,7 @@ async function handleDeposit(req, res) {
       },
     );
     if (!patchResponse.ok) {
-      const memRow = memoryRecords.get(recordId);
-      if (memRow) { memRow.custody_point_id = pointId; memRow.pickup_code = pickupCode; memRow.item_status = "custody"; memoryRecords.set(recordId, memRow); }
-      sendJson(res, 200, { ok: true, pickup_code: pickupCode, deposit_code: pickupCode.slice(0, 2), claim_code: pickupCode.slice(3), point_id: pointId, fallback: true });
+      sendJson(res, 500, { error: "寄存失败，请稍后重试" });
       return;
     }
     const memRow = memoryRecords.get(recordId);
@@ -164,9 +162,8 @@ async function handleDeposit(req, res) {
       point_id: pointId,
     });
   } catch (error) {
-    const memRow = memoryRecords.get(recordId);
-    if (memRow) { memRow.custody_point_id = pointId; memRow.pickup_code = pickupCode; memRow.item_status = "custody"; memoryRecords.set(recordId, memRow); }
-    sendJson(res, 200, { ok: true, pickup_code: pickupCode, deposit_code: pickupCode.slice(0, 2), claim_code: pickupCode.slice(3), point_id: pointId, fallback: true });
+    // 数据库异常时返回错误，不回退内存假装成功
+    sendJson(res, 500, { error: "寄存操作失败，请稍后重试" });
   }
 }
 
@@ -221,21 +218,11 @@ async function handlePickup(req, res) {
   try {
     const response = await supabaseFetch(
       config,
-      `/rest/v1/${RECORDS_TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id,claimed_by,pickup_code&limit=1`,
+      `/rest/v1/${RECORDS_TABLE}?id=eq.${encodeURIComponent(recordId)}&select=owner_id,claimed_by,pickup_code,item_status&limit=1`,
       { method: "GET" },
     );
     if (!response.ok) {
-      const memRow = memoryRecords.get(recordId);
-      if (memRow && memRow.pickup_code) {
-        if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
-          sendJson(res, 403, { error: "只有发布者或认领者才能取件" }); return;
-        }
-        const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
-        const submitted = submittedCode.replace(/-/g, "");
-        if (expected !== submitted) { sendJson(res, 400, { error: "取件码不正确" }); return; }
-        memRow.item_status = "picked"; memRow.status = "已归还"; memoryRecords.set(recordId, memRow);
-      }
-      sendJson(res, 200, { ok: true, fallback: true });
+      sendJson(res, 500, { error: "查询记录失败" });
       return;
     }
     const rows = await response.json();
@@ -247,6 +234,11 @@ async function handlePickup(req, res) {
     // 权限校验：只有发布者或认领者才能取件
     if (record.owner_id !== current.sub && record.claimed_by !== current.sub) {
       sendJson(res, 403, { error: "只有发布者或认领者才能取件" });
+      return;
+    }
+    // 状态校验：只有 custody 状态才能取件，防止重复取件
+    if (record.item_status !== "custody") {
+      sendJson(res, 400, { error: "该物品当前状态不允许取件" });
       return;
     }
     const expected = String(record.pickup_code || "").toUpperCase().replace(/-/g, "");
@@ -267,16 +259,7 @@ async function handlePickup(req, res) {
     if (memRow) { memRow.item_status = "picked"; memRow.status = "已归还"; memoryRecords.set(recordId, memRow); }
     sendJson(res, 200, { ok: true });
   } catch (error) {
-    const memRow = memoryRecords.get(recordId);
-    if (memRow && memRow.pickup_code) {
-      if (memRow.owner_id !== current.sub && memRow.claimed_by !== current.sub) {
-        sendJson(res, 403, { error: "只有发布者或认领者才能取件" }); return;
-      }
-      const expected = String(memRow.pickup_code).toUpperCase().replace(/-/g, "");
-      const submitted = submittedCode.replace(/-/g, "");
-      if (expected !== submitted) { sendJson(res, 400, { error: "取件码不正确" }); return; }
-      memRow.item_status = "picked"; memRow.status = "已归还"; memoryRecords.set(recordId, memRow);
-    }
-    sendJson(res, 200, { ok: true, fallback: true });
+    // 数据库异常时返回错误，不回退内存假装成功
+    sendJson(res, 500, { error: "取件操作失败，请稍后重试" });
   }
 }

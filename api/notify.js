@@ -99,7 +99,7 @@ async function handleMarkRead(req, res) {
 
   try {
     const idFilter = ids.map((id) => `id.eq.${encodeURIComponent(id)}`).join(",");
-    await supabaseFetch(
+    const resp = await supabaseFetch(
       config,
       `/rest/v1/${NOTIFICATIONS_TABLE}?user_id=eq.${encodeURIComponent(current.sub)}&or=(${idFilter})`,
       {
@@ -107,9 +107,13 @@ async function handleMarkRead(req, res) {
         body: JSON.stringify({ is_read: true }),
       },
     );
+    if (!resp.ok) {
+      sendJson(res, 500, { ok: false, error: "标记已读失败" });
+      return;
+    }
     sendJson(res, 200, { ok: true });
   } catch (error) {
-    sendJson(res, 200, { ok: true });
+    sendJson(res, 500, { ok: false, error: "标记已读失败" });
   }
 }
 

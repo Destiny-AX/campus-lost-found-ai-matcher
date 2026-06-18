@@ -1623,11 +1623,9 @@ async function handleUpdate(req, res) {
         return;
       }
     } else {
-      const memRow = memoryRecords.get(id);
-      if (memRow && memRow.owner_id && memRow.owner_id !== current.sub) {
-        sendJson(res, 403, { error: "只能更新自己发布的记录" });
-        return;
-      }
+      // 数据库查询失败时拒绝更新，避免权限校验被绕过
+      sendJson(res, 500, { error: "校验记录失败，请稍后重试" });
+      return;
     }
     await supabaseFetch(
       config,
