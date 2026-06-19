@@ -291,6 +291,17 @@ function bindEvents() {
       const isFound = radio.value === "found";
       if (els.itemStatusGroup) els.itemStatusGroup.hidden = !isFound;
       if (els.claimQuestionGroup) els.claimQuestionGroup.hidden = !isFound;
+      // 切换视角时同步代保管点选择器可见性
+      if (els.custodyPicker) {
+        if (!isFound) {
+          // 切到丢失视角：隐藏代保管点
+          els.custodyPicker.hidden = true;
+        } else {
+          // 切到捡到视角：根据当前选中的 item_status 决定
+          const checkedStatus = els.publishForm.querySelector('input[name="item_status"]:checked');
+          els.custodyPicker.hidden = checkedStatus?.value !== "custody";
+        }
+      }
     });
   });
   els.publishForm?.querySelectorAll('input[name="item_status"]').forEach((radio) => {
@@ -929,6 +940,13 @@ function renderMatchView() {
       if (record) showMatchContact(record);
     });
   });
+  // 未实名的"实名后联系"按钮：点击时弹出认证引导
+  els.matchResults.querySelectorAll(".contact-disabled-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showToast("请先完成实名认证以查看联系方式", "info");
+      setTimeout(() => els.verifyDialog.showModal(), 500);
+    });
+  });
 }
 
 function showMatchContact(record) {
@@ -992,7 +1010,7 @@ function renderMatchItem(record, result) {
       <ul class="reason-list">${result.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
       <div class="card-actions">
         <button class="ghost-button" data-detail-id="${record.id}" type="button">查看详情</button>
-        ${currentUser?.verified ? `<button class="ghost-button" data-contact-id="${record.id}" type="button">联系对方</button>` : `<button class="ghost-button" type="button" disabled>实名后联系</button>`}
+        ${currentUser?.verified ? `<button class="ghost-button" data-contact-id="${record.id}" type="button">联系对方</button>` : `<button class="ghost-button contact-disabled-btn" type="button" title="请先完成实名认证后查看联系方式" aria-disabled="true">实名后联系</button>`}
       </div>
     </div>
   </article>`;

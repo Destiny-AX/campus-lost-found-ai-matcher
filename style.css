@@ -24,7 +24,7 @@
   --radius: 16px; --radius-sm: 10px; --radius-xs: 6px;
   --shadow: 0 1px 3px rgba(0,0,0,0.04); --shadow-lg: 0 8px 30px rgba(0,0,0,0.08); --shadow-xl: 0 12px 40px rgba(0,0,0,0.12);
   /* 布局 */
-  --side-w: 220px; --inspector-w: 280px;
+  --side-w: 220px; --inspector-w: 320px;
   --wechat: #07c160;
   --muted: #6e6e73; --danger: #ff3b30;
   /* 动画变量 */
@@ -44,18 +44,23 @@ body {
 
 /* ============== App Shell ============== */
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--side-w) 1fr var(--inspector-w);
+  display: flex;
   min-height: 100vh;
-  align-items: start;
+  align-items: flex-start;
+  margin-left: var(--side-w);
 }
 
 /* ============== Side Nav ============== */
 .side-nav {
-  position: sticky; top: 0; align-self: start; height: 100vh; padding: 24px 16px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--side-w);
+  height: 100vh;
+  padding: 24px 16px;
   background: var(--glass); backdrop-filter: var(--glass-blur);
   border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;
-  overflow-y: auto;
+  overflow-y: auto; z-index: 100;
 }
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .brand-mark {
@@ -84,7 +89,9 @@ body {
 
 /* ============== Content ============== */
 .content {
-  padding: 32px 40px; width: 100%; min-width: 0;
+  flex: 1;
+  padding: 32px 40px;
+  min-width: 0;
 }
 
 .top-bar {
@@ -98,8 +105,14 @@ body {
 
 /* ============== Inspector ============== */
 .inspector {
-  position: sticky; top: 0; align-self: start; height: 100vh; padding: 24px 16px;
-  border-left: 1px solid var(--border); overflow-y: auto;
+  width: var(--inspector-w);
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  padding: 24px 16px;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
 }
 .inspector-card { margin-bottom: 20px; padding: 16px; background: var(--surface-1); border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .inspector-card h3 { font-size: var(--text-sm); font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); }
@@ -341,6 +354,16 @@ body {
 }
 .ghost-button:hover { background: rgba(0,113,227,0.06); }
 .ghost-button:disabled { color: var(--text3); cursor: not-allowed; transform: none !important; }
+/* 未实名认证的"实名后联系"按钮：视觉置灰但保留悬浮提示和点击引导 */
+.ghost-button.contact-disabled-btn {
+  color: var(--text3);
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none !important;
+}
+.ghost-button.contact-disabled-btn:hover {
+  background: rgba(0,113,227,0.04);
+}
 
 .primary-action {
   padding: 8px 18px; border-radius: var(--radius-sm); border: none;
@@ -398,12 +421,33 @@ body {
 .form-row.segmented label {
   flex: 1; text-align: center; padding: 10px; cursor: pointer;
   font-size: 14px; transition: all 0.15s;
+  position: relative;
 }
-.form-row.segmented input { display: none; }
+.form-row.segmented input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
 .form-row.segmented input:checked + span {
   color: var(--blue); font-weight: 600;
 }
 .form-row.segmented label:has(input:checked) {
+  background: rgba(0,113,227,0.08);
+}
+/* 兼容不支持 :has() 的浏览器 */
+.form-row.segmented input:checked + span {
+  color: var(--blue); font-weight: 600;
+}
+.form-row.segmented label input:checked ~ span {
+  color: var(--blue); font-weight: 600;
+}
+.form-row.segmented label.is-checked {
   background: rgba(0,113,227,0.08);
 }
 
@@ -413,9 +457,22 @@ body {
 .status-option {
   display: flex; gap: 8px; padding: 10px; border-radius: var(--radius-xs);
   border: 1px solid var(--border); cursor: pointer; transition: all 0.15s;
+  position: relative;
 }
-.status-option input { display: none; }
+.status-option input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
 .status-option:has(input:checked) { border-color: var(--blue); background: rgba(0,113,227,0.04); }
+/* 兼容不支持 :has() 的浏览器 */
+.status-option.is-checked { border-color: var(--blue); background: rgba(0,113,227,0.04); }
 .status-option span { font-size: 13px; }
 .status-option strong { display: block; font-size: 14px; }
 .status-option small { display: block; color: var(--text3); font-size: 11px; }
@@ -425,12 +482,25 @@ body {
 }
 .form-grid label, .wide-label {
   font-size: 13px; color: var(--text2); display: flex; flex-direction: column; gap: 4px;
+  cursor: pointer;
 }
-.form-grid input, .form-grid select, .wide-label textarea {
+.form-grid input, .form-grid select, .wide-label input, .wide-label textarea {
   padding: 10px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border);
   font-size: 14px; outline: none; font-family: inherit;
+  cursor: text;
 }
-.form-grid input:focus, .form-grid select:focus, .wide-label textarea:focus { border-color: var(--blue); }
+.form-grid input[type="datetime-local"], .wide-label input[type="datetime-local"] {
+  cursor: pointer;
+}
+.form-grid select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e6e73' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+.form-grid input:focus, .form-grid select:focus, .wide-label input:focus, .wide-label textarea:focus { border-color: var(--blue); }
 .wide-label textarea { resize: vertical; }
 
 .custody-picker {
@@ -438,8 +508,13 @@ body {
   border: 1px solid rgba(52,199,89,0.2);
 }
 .custody-picker select {
-  width: 100%; padding: 10px; border-radius: var(--radius-xs);
+  width: 100%; padding: 10px 32px 10px 12px; border-radius: var(--radius-xs);
   border: 1px solid var(--border); font-size: 14px; margin-top: 6px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e6e73' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
 }
 
 .upload-zone {
@@ -484,8 +559,13 @@ body {
 .match-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
 .match-control label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 6px; }
 .match-control select {
-  width: 100%; padding: 10px; border-radius: var(--radius-xs);
+  width: 100%; padding: 10px 32px 10px 12px; border-radius: var(--radius-xs);
   border: 1px solid var(--border); font-size: 14px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e6e73' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
 }
 .selected-card { margin: 12px 0; }
 .mini-record {
@@ -620,6 +700,7 @@ body {
 .reason-list li { margin: 2px 0; }
 
 /* ============== Notify View ============== */
+.notify-actions { display: flex; gap: 8px; align-items: center; }
 .notify-list { display: flex; flex-direction: column; gap: 0; }
 .notify-item {
   padding: 14px 0; border-bottom: 1px solid var(--border);
@@ -742,6 +823,8 @@ body {
   border: none; border-radius: var(--radius); padding: 0;
   box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 92%; max-width: 560px;
   margin: auto;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .detail-dialog::backdrop, .login-dialog::backdrop {
   background: rgba(0,0,0,0.2);
@@ -973,6 +1056,14 @@ body {
   padding: 10px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border);
   font-size: 14px; outline: none; font-family: inherit;
 }
+.location-cascade select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e6e73' stroke-width='1.5' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
 .location-cascade select:focus, .location-cascade input:focus { border-color: var(--blue); }
 .location-filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .location-filter-row select {
@@ -987,6 +1078,7 @@ body {
   border: 1px solid rgba(0,113,227,0.15); margin: 12px 0;
 }
 .claim-question { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.claim-hint { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
 .claim-answer-input {
   width: 100%; padding: 10px 12px; border-radius: var(--radius-xs);
   border: 1px solid var(--border); font-size: 14px; margin-bottom: 10px;
@@ -1031,7 +1123,7 @@ body {
   50% { transform: translateY(-6px); }
 }
 .mascot-bubble {
-  pointer-events: auto;
+  pointer-events: none;
   width: 280px; max-height: 400px;
   background: var(--surface); border-radius: var(--radius);
   box-shadow: var(--shadow-lg); font-size: 13px; color: var(--text);
@@ -1046,7 +1138,7 @@ body {
   border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
   transform: rotate(45deg);
 }
-.mascot-bubble.is-visible { opacity: 1; transform: translateY(0); }
+.mascot-bubble.is-visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
 .mascot-bubble-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -1344,13 +1436,12 @@ body {
 /* ============== Responsive — 移动端优化 ============== */
 @media (max-width: 1180px) {
   .inspector { display: none; }
-  .app-shell { grid-template-columns: var(--side-w) 1fr; }
 }
 
 @media (max-width: 1024px) {
   .side-nav { display: none; }
   .app-shell {
-    grid-template-columns: minmax(0, 1fr);
+    margin-left: 0;
     min-height: 100dvh;
     min-height: -webkit-fill-available;
     width: 100%;
@@ -1362,6 +1453,11 @@ body {
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
+    margin-left: 0;
+  }
+  .info-banner {
+    padding: 12px 16px;
+    margin: -16px -16px 16px -16px;
   }
   .bottom-tabs { display: flex; }
 
@@ -1647,6 +1743,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
+  margin: -32px -40px 32px -40px;
   background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
   border-bottom: 1px solid var(--border);
 }
