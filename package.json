@@ -3,9 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "node local-server.js"
+    "start": "node local-server.js",
+    "dev": "node local-server.js",
+    "deploy": "vercel --prod"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "vercel": "^54.14.0"
+  },
+  "devDependencies": {
+    "fontkit": "^2.0.4",
+    "linebreak": "^1.1.0",
+    "pptxgenjs": "^4.0.1",
+    "prismjs": "^1.30.0",
+    "skia-canvas": "^3.0.8"
   }
 }

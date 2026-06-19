@@ -1,0 +1,21 @@
+# Render 部署配置文件
+# 文档: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: shixun-lost-found
+    runtime: node
+    plan: free
+    region: singapore  # 新加坡节点，国内访问较快
+    buildCommand: npm install
+    startCommand: node local-server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 18.20.4
+      - key: PORT
+        value: 10000
+      # 以下敏感环境变量需在 Render 控制台手动配置（同步设置）：
+      # - LOST_FOUND_SUPABASE_URL
+      # - LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY
+      # - LOST_FOUND_SILICON_FLOW_API_KEY
+      # - LOST_FOUND_JWT_SECRET (可选，不配则用 Supabase Key 派生)
