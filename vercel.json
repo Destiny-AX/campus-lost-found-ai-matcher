@@ -11,7 +11,8 @@
     { "src": "api/structured-input.js", "use": "@vercel/node" },
     { "src": "api/notify.js", "use": "@vercel/node" },
     { "src": "api/custody.js", "use": "@vercel/node" },
-    { "src": "api/upload-image.js", "use": "@vercel/node" }
+    { "src": "api/upload-image.js", "use": "@vercel/node" },
+    { "src": "api/migrate-city.js", "use": "@vercel/node" }
   ],
   "routes": [
     { "src": "/api/analyze-image", "dest": "/api/analyze-image.js" },
@@ -21,6 +22,7 @@
     { "src": "/api/notify", "dest": "/api/notify.js" },
     { "src": "/api/custody", "dest": "/api/custody.js" },
     { "src": "/api/upload-image", "dest": "/api/upload-image.js" },
+    { "src": "/api/migrate-city", "dest": "/api/migrate-city.js" },
     { "src": "/images/(.*)", "dest": "/images/$1" },
     { "src": "/style.css", "dest": "/style.css" },
     { "src": "/script.js", "dest": "/script.js" },
