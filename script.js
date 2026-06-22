@@ -2022,7 +2022,7 @@ async function handleUpdateRecord(data) {
       image_data: imageData,
       image_feature: imageFeature,
       semantic: semantic,
-      city: data.city || "上海市",
+      city: data.city || "北京市",
       district: data.district || "",
       street: data.street || "",
       detail_location: data.detail_location || "",

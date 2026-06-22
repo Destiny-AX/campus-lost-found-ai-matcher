@@ -16,21 +16,21 @@ const {
   safeErrorText,
 } = require("./_shared");
 
-// 预置代保管点种子数据（demo 用）
+// 预置代保管点种子数据（demo 用）- 北京市
 const SEED_POINTS = [
-  { id: "cp_001", name: "便利蜂·南京路店", address: "南京东路 588 号", lat: 31.2356, lng: 121.4794, type: "convenience_store", operating_hours: "07:00-23:00" },
-  { id: "cp_002", name: "丰巢智能柜·人民广场", address: "人民大道 200 号 B1", lat: 31.2330, lng: 121.4737, type: "locker", operating_hours: "24h" },
-  { id: "cp_003", name: "万科物业·城市花园", address: "长寿路 100 弄物业中心", lat: 31.2495, lng: 121.4416, type: "property_office", operating_hours: "08:00-22:00" },
-  { id: "cp_004", name: "全家·静安寺店", address: "南京西路 1568 号", lat: 31.2235, lng: 121.4493, type: "convenience_store", operating_hours: "06:30-23:30" },
-  { id: "cp_005", name: "丰巢智能柜·徐家汇地铁站", address: "肇嘉浜路 1000 号 1 号口", lat: 31.1948, lng: 121.4365, type: "locker", operating_hours: "05:30-23:30" },
+  { id: "cp_001", name: "便利蜂·王府井店", address: "王府井大街 588 号", lat: 39.9145, lng: 116.4114, type: "convenience_store", operating_hours: "07:00-23:00" },
+  { id: "cp_002", name: "丰巢智能柜·西单", address: "西单北大街 200 号 B1", lat: 39.9087, lng: 116.3743, type: "locker", operating_hours: "24h" },
+  { id: "cp_003", name: "万科物业·朝阳城市花园", address: "朝阳路 100 弄物业中心", lat: 39.9248, lng: 116.4854, type: "property_office", operating_hours: "08:00-22:00" },
+  { id: "cp_004", name: "全家·三里屯店", address: "三里屯路 1568 号", lat: 39.9335, lng: 116.4543, type: "convenience_store", operating_hours: "06:30-23:30" },
+  { id: "cp_005", name: "丰巢智能柜·中关村地铁站", address: "中关村大街 1000 号 1 号口", lat: 39.9848, lng: 116.3165, type: "locker", operating_hours: "05:30-23:30" },
 ];
 
-// 预置认证机构种子数据
+// 预置认证机构种子数据 - 北京市
 const SEED_INSTITUTIONS = [
-  { id: "inst_001", name: "上海地铁失物招领中心", type: "transit", verified: true, contact: "021-12345678", address: "人民广场地铁站 B 出口" },
-  { id: "inst_002", name: "南京东路派出所", type: "police", verified: true, contact: "021-63170110", address: "南京东路 410 号" },
-  { id: "inst_003", name: "浦东国际机场失物招领处", type: "airport", verified: true, contact: "021-96990", address: "T2 航站楼 5F" },
-  { id: "inst_004", name: "静安区市民服务中心", type: "government", verified: true, contact: "12345", address: "胶州路 1075 号" },
+  { id: "inst_001", name: "北京地铁失物招领中心", type: "transit", verified: true, contact: "010-12345678", address: "王府井地铁站 B 出口" },
+  { id: "inst_002", name: "王府井派出所", type: "police", verified: true, contact: "010-65231234", address: "王府井大街 410 号" },
+  { id: "inst_003", name: "首都国际机场失物招领处", type: "airport", verified: true, contact: "010-64535856", address: "T3 航站楼 5F" },
+  { id: "inst_004", name: "朝阳区市民服务中心", type: "government", verified: true, contact: "12345", address: "朝阳路 1075 号" },
 ];
 
 const POINTS_TABLE = "shiyun_custody_points";
