@@ -1346,7 +1346,12 @@ async function handleList(req, res) {
     }
     const rows = JSON.parse(text || "[]");
     console.log(`[LIST] Fetched ${rows.length} rows from Supabase`);
-    const supabaseRecords = rows.map((row) => fromSupabaseRow(row, current)).filter(Boolean);
+    // 过滤掉旧的上海市数据（迁移期间临时逻辑，待数据库清理后可移除）
+    const filteredRows = rows.filter((row) => row.city !== "上海市");
+    if (filteredRows.length < rows.length) {
+      console.log(`[LIST] Filtered ${rows.length - filteredRows.length} legacy Shanghai records`);
+    }
+    const supabaseRecords = filteredRows.map((row) => fromSupabaseRow(row, current)).filter(Boolean);
     console.log(`[LIST] Returning ${supabaseRecords.length} records`);
     sendJson(res, 200, { records: supabaseRecords });
   } catch (error) {
@@ -1429,6 +1434,29 @@ async function syncSeedRecordsToSupabase(config) {
       }
       const existing = await checkResp.json();
       if (existing.length > 0) {
+        // 检查是否需要更新（如城市数据迁移：上海市→北京市）
+        const existingRow = existing[0];
+        if (existingRow.city !== record.city && record.city) {
+          const updateResp = await supabaseFetch(config, `/rest/v1/${TABLE}?id=eq.${encodeURIComponent(record.id)}`, {
+            method: "PATCH",
+            headers: {
+              Prefer: "return=representation",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              city: record.city,
+              district: record.district,
+              street: record.street,
+              location: record.location,
+              detail_location: record.detail_location,
+              contact: record.contact,
+              description: record.description,
+            }),
+          });
+          if (updateResp.ok) {
+            console.log(`[SYNC] Updated record ${record.id}: city ${existingRow.city} → ${record.city}`);
+          }
+        }
         successCount++; // 已存在，算成功
         continue;
       }
