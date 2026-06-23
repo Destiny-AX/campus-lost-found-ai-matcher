@@ -590,6 +590,30 @@ function setSelectValue(select, value) {
 }
 
 // ============== 数据加载 ==============
+// 记录列表缓存：30秒 TTL，避免频繁刷新重复请求后端
+const RECORDS_CACHE_KEY = "shixun_records_cache";
+const RECORDS_CACHE_TTL = 30000; // 30秒
+
+function getRecordsCache() {
+  try {
+    const cached = localStorage.getItem(RECORDS_CACHE_KEY);
+    if (!cached) return null;
+    const { timestamp, records } = JSON.parse(cached);
+    if (Date.now() - timestamp > RECORDS_CACHE_TTL) return null;
+    return records;
+  } catch (e) { return null; }
+}
+
+function setRecordsCache(records) {
+  try {
+    localStorage.setItem(RECORDS_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), records }));
+  } catch (e) { /* localStorage 满或不可用，静默 */ }
+}
+
+function clearRecordsCache() {
+  try { localStorage.removeItem(RECORDS_CACHE_KEY); } catch (e) { /* 静默 */ }
+}
+
 async function loadRecords() {
   try {
     const remoteRecords = await fetchPersistedRecords();
@@ -606,7 +630,9 @@ async function hydrateRecord(record) {
     const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
     const seed = record.visualSeed || defaultSeed;
     const imageData = record.imageData || createSyntheticImage(seed, record.title);
-    const imageFeature = record.imageFeature || (imageData ? (await extractImageFeatures(imageData)) : null);
+    // 懒加载：已有 imageFeature 直接用，没有的设为 null，匹配时按需提取
+    // 这样初始加载时不触发 Canvas 计算，大幅减少 hydrate 耗时
+    const imageFeature = record.imageFeature || null;
     return { ...record, imageData, imageFeature, semantic: record.semantic || buildFallbackSemantic(record) };
   } catch (e) {
     console.error("hydrateRecord 失败:", record.id, e);
@@ -614,13 +640,30 @@ async function hydrateRecord(record) {
   }
 }
 
+// 按需提取图片特征（匹配时调用，避免初始加载时全量计算）
+// 提取后缓存到记录对象上，避免同一记录重复计算
+async function ensureImageFeature(record) {
+  if (record.imageFeature) return record.imageFeature;
+  if (!record.imageData) return null;
+  const feature = await extractImageFeatures(record.imageData);
+  record.imageFeature = feature;
+  return feature;
+}
+
 async function fetchPersistedRecords() {
+  // 1. 先检查缓存，命中则直接返回（30秒内避免重复请求）
+  const cached = getRecordsCache();
+  if (cached) return cached;
+  // 2. 发起网络请求
   try {
     const response = await fetch("/api/records", { headers: authHeaders() });
     if (!response.ok) return [];
     const payload = await response.json();
     const list = Array.isArray(payload.records) ? payload.records.filter(Boolean) : [];
-    return Promise.all(list.map(hydrateRecord));
+    const hydrated = await Promise.all(list.map(hydrateRecord));
+    // 3. 写入缓存
+    setRecordsCache(hydrated);
+    return hydrated;
   } catch (e) { return []; }
 }
 
@@ -1355,6 +1398,7 @@ function openDetail(id) {
         if (data.ok) {
           showToast("已标记归还，等待失主确认", "success");
           els.detailDialog.close();
+          clearRecordsCache();
           await loadRecords();
           renderAll();
         } else {
@@ -1378,6 +1422,7 @@ function openDetail(id) {
         if (data.ok) {
           showToast("确认完成！积分已发放", "success");
           els.detailDialog.close();
+          clearRecordsCache();
           await loadRecords();
           renderAll();
         } else {
@@ -1823,6 +1868,7 @@ async function handlePublish(event) {
       const persisted = await persistRecord(newRecord);
       const saved = persisted || newRecord;
       records.unshift(saved);
+      clearRecordsCache();
       try {
         const depositResp = await fetch("/api/custody?action=deposit", {
           method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1839,6 +1885,7 @@ async function handlePublish(event) {
       const persisted = await persistRecord(newRecord);
       const saved = persisted || newRecord;
       records.unshift(saved);
+      clearRecordsCache();
     }
 
     // 增加经验值和徽章
@@ -2122,6 +2169,7 @@ async function handlePickup(event) {
     if (!response.ok) { showToast(payload.error || "取件失败", "error"); return; }
     els.pickupDialog.close();
     showToast("取件成功！双方信用积分 +10", "success");
+    clearRecordsCache();
     records = await loadRecords();
     renderAll();
   } catch (e) { showToast("网络错误", "error"); }

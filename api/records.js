@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 // 记录 CRUD API（v2 扩展版）
 // GET    /api/records              列表（支持模糊化）
@@ -1310,6 +1310,7 @@ const handler = async function handler(req, res) {
     if (action === "get-resolved") return await handleGetResolved(req, res);
     if (action === "submit-review") return await handleSubmitReview(req, res);
     if (action === "report") return await handleReport(req, res);
+    if (action === "sync-seeds") return await handleSyncSeeds(req, res);
     if (req.method === "GET") return await handleList(req, res);
     if (req.method === "POST") return await handleCreate(req, res);
     if (req.method === "DELETE") return await handleDelete(req, res);
@@ -1333,10 +1334,8 @@ async function handleList(req, res) {
   }
 
   try {
-    // 自动同步示例种子数据到数据库（upsert 方式，幂等）
-    const syncResult = await syncSeedRecordsToSupabase(config);
-    console.log(`[LIST] Sync result: ${JSON.stringify(syncResult)}`);
-
+    // 直接查询记录，不再每次请求都同步种子数据（性能优化）
+    // 如需初始化种子数据，请手动调用 /api/records?action=sync-seeds
     const response = await supabaseFetch(config, `/rest/v1/${TABLE}?select=*&order=created_at.desc`, { method: "GET" });
     const text = await response.text();
     if (!response.ok) {
@@ -1357,6 +1356,21 @@ async function handleList(req, res) {
   } catch (error) {
     console.log(`[LIST] Error: ${error.message}`);
     sendJson(res, 503, { error: "数据库服务异常，请稍后再试" });
+  }
+}
+
+// 手动触发种子数据同步（新环境初始化或数据修复时调用）
+async function handleSyncSeeds(req, res) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    sendJson(res, 503, { error: "数据库服务未配置" });
+    return;
+  }
+  try {
+    const result = await syncSeedRecordsToSupabase(config);
+    sendJson(res, 200, { ok: true, ...result });
+  } catch (error) {
+    sendJson(res, 500, { error: "同步失败", detail: safeErrorText(error.message) });
   }
 }
 

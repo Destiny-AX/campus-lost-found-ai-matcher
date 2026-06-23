@@ -74,7 +74,8 @@ module.exports = async function handler(req, res) {
     const prompt = buildPrompt(text);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    // 增加超时到 25 秒，SiliconFlow 免费模型响应较慢
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
     let response;
     try {
@@ -102,6 +103,7 @@ module.exports = async function handler(req, res) {
         structured: heuristicExtract(text),
         source: "heuristic_fallback",
         detail: safeErrorText(error.message),
+        api_status: `fetch_error: ${error.name || "Unknown"}`,
       });
       return;
     }
@@ -113,6 +115,7 @@ module.exports = async function handler(req, res) {
         structured: heuristicExtract(text),
         source: "heuristic_fallback",
         detail: safeErrorText(raw),
+        api_status: `http_${response.status}`,
       });
       return;
     }
@@ -127,6 +130,7 @@ module.exports = async function handler(req, res) {
         structured: heuristicExtract(text),
         source: "heuristic_fallback",
         detail: safeErrorText(error.message),
+        api_status: `parse_error`,
       });
     }
   } catch (error) {
@@ -371,6 +375,136 @@ function parsePossiblyFencedJson(value) {
 }
 
 // 本地启发式提取（API Key 缺失或失败时使用）
+// 时间解析：支持"昨天/今天/前天 + 上午/下午/晚上 + 具体时间"
+function parseTime(text) {
+  const now = new Date();
+  // 辅助：构造指定日期的 ISO 字符串（本地时区）
+  const toIso = (date, hour, minute) => {
+    const d = new Date(date);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString().slice(0, 16);
+  };
+
+  // 日期基准判断
+  let baseDate = now;
+  const hasYesterday = /昨天|昨日/.test(text);
+  const hasToday = /今天|今日/.test(text);
+  const hasDayBefore = /前天|前日/.test(text);
+
+  if (hasYesterday) {
+    baseDate = new Date(now);
+    baseDate.setDate(baseDate.getDate() - 1);
+  } else if (hasDayBefore) {
+    baseDate = new Date(now);
+    baseDate.setDate(baseDate.getDate() - 2);
+  } else if (hasToday) {
+    baseDate = now;
+  } else {
+    // 尝试匹配 "YYYY年M月D日" 完整日期格式
+    const fullDateMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})[日号]/);
+    if (fullDateMatch) {
+      const year = parseInt(fullDateMatch[1], 10);
+      const month = parseInt(fullDateMatch[2], 10);
+      const day = parseInt(fullDateMatch[3], 10);
+      baseDate = new Date(year, month - 1, day);
+    } else {
+      // 尝试匹配 "X月X日" 格式
+      const dateMatch = text.match(/(\d{1,2})月(\d{1,2})[日号]/);
+      if (dateMatch) {
+        const month = parseInt(dateMatch[1], 10);
+        const day = parseInt(dateMatch[2], 10);
+        const year = now.getFullYear();
+        const parsed = new Date(year, month - 1, day);
+        // 如果解析的日期在未来，则认为是去年
+        if (parsed > now) parsed.setFullYear(year - 1);
+        baseDate = parsed;
+      } else {
+        // 无明确日期，先检查"X点半"（避免被 timeMatch 误匹配为整点）
+        const halfMatch = text.match(/(\d{1,2})点半/);
+        if (halfMatch) {
+          let hour = parseInt(halfMatch[1], 10);
+          if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
+          return toIso(now, hour, 30);
+        }
+        // 再尝试匹配具体时间，无则返回当前时间
+        const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+        if (timeMatch) {
+          let hour = parseInt(timeMatch[1], 10);
+          const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+          // 下午/晚上 + 数字 ≤ 6 → +12
+          if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
+          return toIso(now, hour, minute);
+        }
+        // 无时间信息，返回当前时间
+        return now.toISOString().slice(0, 16);
+      }
+    }
+  }
+
+  // 统一处理"X点半"格式（半 = 30分），避免在各个时段分支中重复匹配
+  const halfMatch = text.match(/(\d{1,2})点半/);
+  if (halfMatch) {
+    let hour = parseInt(halfMatch[1], 10);
+    if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
+    return toIso(baseDate, hour, 30);
+  }
+
+  // 时段判断
+  if (/早上|早晨|清晨|上午/.test(text)) {
+    // 上午：匹配具体小时，无则默认 8 点
+    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
+      return toIso(baseDate, hour, minute);
+    }
+    return toIso(baseDate, 8, 0);
+  }
+  if (/中午/.test(text)) {
+    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      if (hour <= 12) hour += 12;
+      return toIso(baseDate, hour, minute);
+    }
+    return toIso(baseDate, 12, 0);
+  }
+  if (/下午|傍晚/.test(text)) {
+    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      if (hour <= 12) hour += 12;
+      return toIso(baseDate, hour, minute);
+    }
+    return toIso(baseDate, 15, 0);
+  }
+  if (/晚上|夜间|夜里/.test(text)) {
+    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      if (hour <= 12) hour += 12;
+      return toIso(baseDate, hour, minute);
+    }
+    return toIso(baseDate, 20, 0);
+  }
+
+  // 有日期但无时段，尝试匹配具体时间
+  const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
+  if (timeMatch) {
+    let hour = parseInt(timeMatch[1], 10);
+    const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
+    return toIso(baseDate, hour, minute);
+  }
+
+  // 有日期但无具体时间，默认中午 12 点
+  return toIso(baseDate, 12, 0);
+}
+
 function heuristicExtract(text) {
   const lower = text;
   // 判断 lost/found：捡到/拾到 关键词出现则 found，否则 lost
@@ -444,9 +578,8 @@ function heuristicExtract(text) {
   }
   detailLocation = location.replace(district, "").replace(street, "").replace(/^[\s·-]+/, "").slice(0, 60);
 
-  // 时间：默认当前
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  // 时间：使用 parseTime 解析"昨天下午3点"等表达，无时间信息时返回当前时间
+  const parsedTime = parseTime(text);
 
   // 标题提取：精准提取物品名称
   let title = "";
@@ -565,7 +698,7 @@ function heuristicExtract(text) {
     district,
     street,
     detail_location: detailLocation,
-    time: now.toISOString().slice(0, 16),
+    time: parsedTime,
     contact,
     description: text.slice(0, 600),
     item_status,
