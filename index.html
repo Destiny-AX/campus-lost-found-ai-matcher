@@ -5,57 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0071e3" />
     <title>拾寻 · 城市拾遗网络</title>
-    <link rel="stylesheet" href="style.css?v=20" />
+    <link rel="stylesheet" href="style.css?v=33" />
   </head>
   <body>
     <!-- 顶部 Toast 通知容器 -->
     <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-    <!-- 使用说明提示条 -->
-    <div class="info-banner" id="infoBanner">
-      <div class="info-banner-content">
-        <span class="info-banner-icon">💡</span>
-        <span class="info-banner-text">新用户？使用说明：发布失物/招领信息 → AI自动匹配 → 实名认证后查看联系方式 → 联系对方取回物品</span>
+    <!-- ============== 侧边导航（桌面） ============== -->
+    <aside class="side-nav" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><img src="/images/logo.png" alt="拾寻" /></div>
+        <div>
+          <h1>拾寻</h1>
+          <p>城市拾遗网络</p>
+        </div>
       </div>
-      <button class="info-banner-close" id="closeInfoBanner" type="button" aria-label="关闭">×</button>
-    </div>
+      <nav class="nav-list">
+        <button class="nav-item is-active" data-view-target="home" type="button">
+          <span class="nav-icon" aria-hidden="true">⌂</span><span>失物广场</span>
+        </button>
+        <button class="nav-item" data-view-target="publish" type="button">
+          <span class="nav-icon" aria-hidden="true">＋</span><span>智能发布</span>
+        </button>
+        <button class="nav-item" data-view-target="match" type="button">
+          <span class="nav-icon" aria-hidden="true">◎</span><span>AI 匹配</span>
+        </button>
+        <button class="nav-item" data-view-target="notify" type="button">
+          <span class="nav-icon" aria-hidden="true">♪</span>
+          <span>消息<span class="badge-dot" id="notifyBadge" hidden></span></span>
+        </button>
+        <button class="nav-item" data-view-target="profile" type="button">
+          <span class="nav-icon" aria-hidden="true">◉</span><span>我的</span>
+        </button>
+        <button class="nav-item" data-view-target="stats" type="button">
+          <span class="nav-icon" aria-hidden="true">▦</span><span>数据概览</span>
+        </button>
+      </nav>
+    </aside>
 
     <div class="app-shell">
-      <!-- ============== 侧边导航（桌面） ============== -->
-      <aside class="side-nav" aria-label="主导航">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true"><img src="images/logo.png" alt="拾寻" /></div>
-          <div>
-            <h1>拾寻</h1>
-            <p>城市拾遗网络</p>
-          </div>
-        </div>
-        <nav class="nav-list">
-          <button class="nav-item is-active" data-view-target="home" type="button">
-            <span class="nav-icon" aria-hidden="true">⌂</span><span>失物广场</span>
-          </button>
-          <button class="nav-item" data-view-target="publish" type="button">
-            <span class="nav-icon" aria-hidden="true">＋</span><span>智能发布</span>
-          </button>
-          <button class="nav-item" data-view-target="match" type="button">
-            <span class="nav-icon" aria-hidden="true">◎</span><span>AI 匹配</span>
-          </button>
-          <button class="nav-item" data-view-target="notify" type="button">
-            <span class="nav-icon" aria-hidden="true">♪</span>
-            <span>消息<span class="badge-dot" id="notifyBadge" hidden></span></span>
-          </button>
-          <button class="nav-item" data-view-target="profile" type="button">
-            <span class="nav-icon" aria-hidden="true">◉</span><span>我的</span>
-          </button>
-          <button class="nav-item" data-view-target="stats" type="button">
-            <span class="nav-icon" aria-hidden="true">▦</span><span>数据概览</span>
-          </button>
-        </nav>
-
-      </aside>
-
       <!-- ============== 主内容区 ============== -->
       <main class="content">
+        <!-- 使用说明提示条 -->
+        <div class="info-banner" id="infoBanner">
+          <div class="info-banner-content">
+            <span class="info-banner-icon">💡</span>
+            <span class="info-banner-text">新用户？使用说明：发布失物/招领信息 → AI自动匹配 → 实名认证后查看联系方式 → 联系对方取回物品</span>
+          </div>
+          <button class="info-banner-close" id="closeInfoBanner" type="button" aria-label="关闭">×</button>
+        </div>
+
         <header class="top-bar">
           <div class="top-bar-actions">
             <button class="ghost-button" id="topVerifyBtn" type="button" hidden>实名认证</button>
@@ -64,7 +63,7 @@
         </header>
 
         <section class="mobile-title" aria-label="移动端标题">
-          <div class="mobile-brand-mark" aria-hidden="true"><img src="images/logo.png" alt="拾寻" /></div>
+          <div class="mobile-brand-mark" aria-hidden="true"><img src="/images/logo.png" alt="拾寻" /></div>
           <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
         </section>
 
@@ -372,10 +371,13 @@
               <h3 id="notify-heading">消息中心</h3>
               <p>匹配成功、代保管寄存、取件提醒、信用变更都会在这里实时通知（每 8 秒轮询）。</p>
             </div>
-            <button class="ghost-button" id="markAllReadBtn" type="button">全部已读</button>
+            <div class="notify-actions">
+              <button class="ghost-button" id="refreshNotifyBtn" type="button">刷新</button>
+              <button class="ghost-button" id="markAllReadBtn" type="button">全部已读</button>
+            </div>
           </div>
           <div class="notify-list" id="notifyList">
-            <div class="empty-state">暂无消息，发布信息后系统会自动推送匹配线索。</div>
+            <div class="empty-state">暂无消息。当有用户申请认领、审核结果或归还确认时，会出现在这里。</div>
           </div>
         </section>
 
