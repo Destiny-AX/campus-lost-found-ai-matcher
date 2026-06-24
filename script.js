@@ -524,6 +524,8 @@ async function handleVerifyIdentity(event) {
     addAccount(payload.token, payload.user);
     updateAuthUI();
     els.verifyDialog.close();
+    // 清除记录缓存：认证前缓存的模糊记录需要失效，刷新后重新请求非模糊数据
+    clearRecordsCache();
     showToast("实名认证成功！现在可以查看完整信息。", "success");
     setTimeout(() => window.location.reload(), 300);
   } catch (e) {
