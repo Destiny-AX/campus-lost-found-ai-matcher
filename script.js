@@ -554,10 +554,17 @@ async function handleAiExtract() {
     if (!response.ok || !payload.structured) { showToast("AI 分析失败，请手动填写", "error"); return; }
     const s = payload.structured;
     fillFormFields(s);
-    if (s.title && (s.title.length > 15 || /^(?:在|丢了|捡到|一个)/.test(s.title))) {
-      showToast(`AI 已自动填表，但 title "${s.title}" 可能需要手动修正`, "warning");
+    // 根据来源构建提示信息
+    const isAi = payload.source === "ai";
+    const modelLabel = payload.ai_model ? `，模型：${payload.ai_model.split("/").pop()}` : "";
+    if (!isAi) {
+      // AI 不可用，降级为本地提取
+      const reason = payload.ai_error || "未知原因";
+      showToast(`AI 暂不可用（${reason}），已使用本地提取，精度较低建议手动修正`, "warning");
+    } else if (s.title && (s.title.length > 15 || /^(?:在|丢了|捡到|一个)/.test(s.title))) {
+      showToast(`AI 已填表${modelLabel}，但 title "${s.title}" 可能需要手动修正`, "warning");
     } else {
-      showToast(`AI 已自动填表（置信度 ${Math.round(s.confidence * 100)}%，来源：${payload.source}）`, "success");
+      showToast(`AI 已填表（置信度 ${Math.round(s.confidence * 100)}%${modelLabel}）`, "success");
     }
   } catch (e) {
     showToast("网络错误，请手动填写", "error");

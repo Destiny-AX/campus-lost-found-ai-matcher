@@ -12,8 +12,10 @@ const {
   getCurrentUser,
 } = require("./_shared");
 
-// 文本模型，与视觉模型分开（视觉模型也能跑文本但成本更高）
+// 文本模型：主模型 + 降级模型
+// 主模型 Qwen3-8B 较轻量；若主模型不可用则降级到 DeepSeek-V4-Flash
 const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "Qwen/Qwen3-8B";
+const FALLBACK_MODEL = process.env.SILICON_FLOW_FALLBACK_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
 const MAX_TOKENS = 800;
 
@@ -67,77 +69,80 @@ module.exports = async function handler(req, res) {
 
     // 没有 API Key 时走本地启发式 fallback，保证 demo 可用
     if (!apiKey) {
-      sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic" });
+      sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic", ai_error: "API Key 未配置" });
       return;
     }
 
     const prompt = buildPrompt(text);
 
-    const controller = new AbortController();
-    // 增加超时到 25 秒，SiliconFlow 免费模型响应较慢
-    const timeout = setTimeout(() => controller.abort(), 25000);
-
-    let response;
-    try {
-      response = await fetch(SILICON_FLOW_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: TEXT_MODEL,
-          messages: [
-            { role: "system", content: "你是失物招领信息结构化提取助手，必须严格输出 JSON。" },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.1,
-          max_tokens: MAX_TOKENS,
-          response_format: { type: "json_object" },
-        }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      clearTimeout(timeout);
-      sendJson(res, 200, {
-        structured: heuristicExtract(text),
-        source: "heuristic_fallback",
-        detail: safeErrorText(error.message),
-        api_status: `fetch_error: ${error.name || "Unknown"}`,
-      });
-      return;
-    }
-    clearTimeout(timeout);
-
-    const raw = await response.text();
-    if (!response.ok) {
-      sendJson(res, 200, {
-        structured: heuristicExtract(text),
-        source: "heuristic_fallback",
-        detail: safeErrorText(raw),
-        api_status: `http_${response.status}`,
-      });
-      return;
+    // 依次尝试主模型和降级模型，任一成功即返回
+    const models = [TEXT_MODEL, FALLBACK_MODEL];
+    let lastError = "";
+    for (const model of models) {
+      const result = await callSiliconFlow(apiKey, model, prompt);
+      if (result.ok) {
+        try {
+          const structured = normalizeStructured(parsePossiblyFencedJson(result.content), text);
+          sendJson(res, 200, { structured, source: "ai", ai_model: model });
+          return;
+        } catch (parseErr) {
+          // 解析失败，记录错误并尝试下一个模型
+          lastError = `parse_error(${model}): ${safeErrorText(parseErr.message)}`;
+          continue;
+        }
+      }
+      // 记录失败原因，尝试下一个模型
+      lastError = result.error;
     }
 
-    try {
-      const payload = JSON.parse(raw);
-      const content = payload.choices?.[0]?.message?.content || "{}";
-      const structured = normalizeStructured(parsePossiblyFencedJson(content), text);
-      sendJson(res, 200, { structured, source: "ai" });
-    } catch (error) {
-      sendJson(res, 200, {
-        structured: heuristicExtract(text),
-        source: "heuristic_fallback",
-        detail: safeErrorText(error.message),
-        api_status: `parse_error`,
-      });
-    }
+    // 所有模型都失败，降级为启发式提取，并附带错误信息
+    sendJson(res, 200, {
+      structured: heuristicExtract(text),
+      source: "heuristic_fallback",
+      ai_error: lastError,
+    });
   } catch (error) {
     // 顶层异常兜底，避免未处理异常导致进程崩溃
     sendJson(res, 500, { error: "结构化提取失败", detail: safeErrorText(error.message) });
   }
 };
+
+// 调用 SiliconFlow API，返回 { ok, content, error }
+async function callSiliconFlow(apiKey, model, prompt) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  try {
+    const response = await fetch(SILICON_FLOW_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: "你是失物招领信息结构化提取助手，必须严格输出 JSON。" },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.1,
+        max_tokens: MAX_TOKENS,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const raw = await response.text();
+    if (!response.ok) {
+      return { ok: false, content: "", error: `http_${response.status}: ${safeErrorText(raw).slice(0, 200)}` };
+    }
+    const payload = JSON.parse(raw);
+    const content = payload.choices?.[0]?.message?.content || "{}";
+    return { ok: true, content, error: "" };
+  } catch (error) {
+    clearTimeout(timeout);
+    return { ok: false, content: "", error: `${error.name || "Unknown"}: ${safeErrorText(error.message)}` };
+  }
+}
 
 function buildPrompt(text) {
   const now = new Date();
@@ -148,91 +153,39 @@ function buildPrompt(text) {
   const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
   return [
-    "你是一位失物招领信息提取助手。从用户描述中提取关键信息，输出严格的 JSON 对象，不要输出任何其他内容。",
+    "从用户描述中提取失物招领信息，输出严格 JSON，不要输出其他内容。",
     "",
-    "━━━ 提取规则（严格遵循）━━━",
+    "字段规则：",
+    'title: 物品核心名称，≤15字。禁止包含颜色/数量/动作词。"黑色一加耳机"→"一加耳机"，"丢了身份证"→"身份证"',
+    'type: "lost"(丢/遗失/掉了/不见了) 或 "found"(捡到/拾到/发现/看到)',
+    "category: 从 [证件,电子设备,生活用品,学习用品,钥匙,箱包,贵重物品,其他] 中选1个。耳机→电子设备，校园卡套→证件",
+    "color: 从 [黑色,白色,蓝色,红色,黄色,绿色,银色,灰色,粉色,透明] 中选1个，无则填空字符串",
+    "location: 纯地点文本，去除动词前缀（在/丢在/捡到）",
+    "district: 从北京16区中选 [东城区,西城区,朝阳区,丰台区,石景山区,海淀区,门头沟区,房山区,通州区,顺义区,昌平区,大兴区,怀柔区,平谷区,密云区,延庆区]，无法判断填空字符串",
+    "street: 街道或地标名，如王府井、三里屯、中关村",
+    "detail_location: 精确位置，如地铁站5号口、图书馆三楼",
+    "time: ISO格式 YYYY-MM-DDTHH:mm",
+    "contact: 联系方式（机构名+电话 或 手机号），去除动词前缀",
+    'item_status: "in_place"(仍在原处) / "custody"(有人保管) / "institution"(已交机构) / "unknown"',
+    "description: 通顺陈述句，整理口语化表达",
+    "confidence: 0到1的数字",
     "",
-    "## title — 物品核心名称（最重要）",
-    "只提取物品名称本身，绝对不允许添加任何修饰词",
-    "❌ 禁止包含：颜色、数量、新旧、大小、地点、动作词（丢/捡/看到/发现/找了/没了）",
-    '❌ "黑色一加耳机" → 错误，应输出 "一加耳机"',
-    '❌ "丢了身份证" → 错误，应输出 "身份证"',
-    '❌ "一个蓝色校园卡套" → 错误，应输出 "校园卡套"',
-    '❌ "在图书馆捡到的学生证" → 错误，应输出 "学生证"',
-    '✅ 只输出物品核心名称，≤15字',
+    "时间换算参考：",
+    `"昨天下午3点" → "${yesterdayStr}T15:00"`,
+    `"今天上午" → "${todayStr}T08:00"`,
+    `"刚刚" → "${nowStr}"`,
     "",
-    "## type",
-    '- "lost": 含"丢""遗失""掉了""找不到""不见了""没了"',
-    '- "found": 含"捡到""拾到""捡了""拾了""看到""发现""找到"（且不含丢的含义）',
+    "示例1：",
+    `输入："昨天下午在王府井地铁站捡到一个黑色一加耳机，已交给服务台，电话010-65231234"`,
+    '输出：{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"王府井地铁站","district":"东城区","street":"王府井","detail_location":"地铁站",' + `"time":"${yesterdayStr}T15:00","contact":"王府井地铁站服务台 010-65231234","item_status":"institution","description":"在王府井地铁站捡到一加耳机，已交服务台","confidence":0.95}`,
     "",
-    "## category — 严格从以下10个中选择1个",
-    "证件：身份证、学生证、校园卡、校园卡套、驾驶证、护照、门禁卡、银行卡、社保卡",
-    "电子设备：手机、耳机、蓝牙耳机、AirPods、电脑、笔记本、平板、iPad、充电器、充电宝、数据线、U盘",
-    "生活用品：伞、雨伞、水杯、保温杯、口红、化妆包、化妆品、镜子、梳子、围巾、帽子、手套",
-    "学习用品：书、课本、教材、笔、本子、文具盒、笔记、试卷、计算器",
-    "钥匙：钥匙、钥匙扣、车钥匙、门钥匙",
-    "箱包：背包、书包、双肩包、钱包、手提包、行李箱、挎包、单肩包、公文包",
-    "贵重物品：手表、项链、戒指、手镯、耳环、首饰、金饰、玉器",
-    "其他：无法归入以上类别的物品",
-    "⚠️ 校园卡套属于'证件'类，不属于'生活用品'。耳机属于'电子设备'类",
-    "",
-    "## color — 严格从以下10个中选择1个，不存在的填空字符串",
-    "黑色、白色、蓝色、红色、黄色、绿色、银色、灰色、粉色、透明",
-    "",
-    "## location — 纯地点文本",
-    "去除所有动词前缀（在/丢在/捡到/掉在/落在）",
-    '"在图书馆丢的" → "图书馆"',
-    "",
-    "## district — 从16个区中选择",
-    "东城区、西城区、朝阳区、丰台区、石景山区、海淀区、门头沟区、房山区、通州区、顺义区、昌平区、大兴区、怀柔区、平谷区、密云区、延庆区",
-    "",
-    "## street — 从地点中提取的街道或地标名称",
-    "如：王府井、三里屯、中关村、五道口、望京",
-    "",
-    "## detail_location — 更精确的位置",
-    "如：地铁站5号口、图书馆三楼B区、食堂门口",
-    "",
-    "## time — ISO 8601 格式 YYYY-MM-DDTHH:mm",
-    `"昨天下午3点左右" → "${yesterdayStr}T15:00"`,
-    `"今天早上" → "${todayStr}T08:00"`,
-    `"今天中午" → "${todayStr}T12:00"`,
-    `"今天下午" → "${todayStr}T15:00"`,
-    `"刚刚""现在""刚才" → "${nowStr}"`,
-    "",
-    "## contact — 联系方式",
-    `机构类：如"地铁站服务台 010-12345678"`,
-    "个人类：手机号或微信号",
-    "❌ 不要包含动词前缀（已联系/交给/送到）",
-    '"已联系地铁站服务台" → 错误，应输出 "地铁站服务台"',
-    "",
-    "## item_status — 物品当前状态",
-    '"in_place": 仍在原处',
-    '"custody": 有人代为保管',
-    '"institution": 已交给机构（服务台/派出所/地铁站等）',
-    '"unknown": 无法判断',
-    "",
-    "## description",
-    "整理为通顺陈述句，去除口语化表达，不重复原文",
-    "",
-    "## confidence — 0到1的数字，表示本次提取的整体准确度",
-    "",
-    "━━━ 三段输入/输出示例 ━━━",
-    "",
-    `示例1 输入："昨天下午在王府井地铁站捡到一个黑色一加耳机，已交给服务台，电话010-65231234"`,
-    '示例1 输出：{"type":"found","title":"一加耳机","category":"电子设备","color":"黑色","location":"王府井地铁站","district":"东城区","street":"王府井","detail_location":"地铁站",' + `"time":"${yesterdayStr}T15:00","contact":"王府井地铁站服务台 010-65231234","item_status":"institution","description":"在王府井地铁站捡到一加耳机，已交服务台","confidence":0.96}`,
-    "",
-    `示例2 输入："我的蓝色校园卡套丢了，里面有校园卡和门禁卡，可能在图书馆也可能是掉在路上了"`,
-    '示例2 输出：{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆",' + `"district":"","street":"","detail_location":"","time":"${todayStr}T12:00","contact":"","item_status":"unknown","description":"蓝色校园卡套丢失，内含校园卡和门禁卡，可能在图书馆或路上","confidence":0.88}`,
-    "",
-    `示例3 输入："刚刚在操场看到一个银色钥匙扣，上面有三把钥匙，还在那没人动"`,
-    '示例3 输出：{"type":"found","title":"钥匙扣","category":"钥匙","color":"银色","location":"操场",' + `"district":"","street":"","detail_location":"","time":"${nowStr}","contact":"","item_status":"in_place","description":"在操场发现银色钥匙扣，有三把钥匙，仍在原处","confidence":0.93}`,
-    "",
-    `示例4 输入："今天上午在朝阳国贸地铁站口丢了苹果AirPods Pro，白色壳，找不到了"`,
-    '示例4 输出：{"type":"lost","title":"AirPods Pro","category":"电子设备","color":"白色","location":"朝阳区国贸地铁站","district":"朝阳区","street":"建外街道","detail_location":"地铁站口",' + `"time":"${todayStr}T10:00","contact":"","item_status":"unknown","description":"在朝阳区国贸地铁站口丢失苹果AirPods Pro白色款","confidence":0.91}`,
+    "示例2：",
+    `输入："我的蓝色校园卡套丢了，里面有校园卡和门禁卡，可能在图书馆也可能是掉在路上了"`,
+    '输出：{"type":"lost","title":"校园卡套","category":"证件","color":"蓝色","location":"图书馆",' + `"district":"","street":"","detail_location":"","time":"${todayStr}T12:00","contact":"","item_status":"unknown","description":"蓝色校园卡套丢失，内含校园卡和门禁卡","confidence":0.85}`,
     "",
     `当前时间: ${nowStr}`,
     "",
-    "## 用户描述",
+    "用户描述：",
     text,
   ].join("\n");
 }
