@@ -370,7 +370,13 @@ function restoreAuth() {
   }
   try {
     const payload = decodeJwtPayload(token);
-    if (payload.exp && Date.now() / 1000 > payload.exp) { localStorage.removeItem(AUTH_TOKEN_KEY); autoLoginDemo(); return; }
+    // token 无效（无 sub 字段）或已过期时，清除并重新登录
+    // 避免无效 token 残留导致 currentUser 被设为空对象，按钮显示但请求 401
+    if (!payload.sub || (payload.exp && Date.now() / 1000 > payload.exp)) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      autoLoginDemo();
+      return;
+    }
     // 页面刷新恢复登录时，JWT的exp是过期时间戳，不能作为经验值使用
     // 经验值应从用户对象获取，此处先设为0，后续可通过/api/auth?action=me获取完整信息
     currentUser = { ...payload, exp: 0 };
