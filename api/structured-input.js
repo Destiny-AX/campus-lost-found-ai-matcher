@@ -13,9 +13,10 @@ const {
 } = require("./_shared");
 
 // 文本模型：主模型 + 降级模型
-// 主模型 Qwen3-8B 较轻量；若主模型不可用则降级到 DeepSeek-V4-Flash
-const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "Qwen/Qwen3-8B";
-const FALLBACK_MODEL = process.env.SILICON_FLOW_FALLBACK_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
+// 主模型 DeepSeek-V4-Flash 输出稳定（content 字段直接含 JSON）；
+// Qwen3-8B 作为降级（思考模式下 content 可能为空，需回退 reasoning_content）
+const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
+const FALLBACK_MODEL = process.env.SILICON_FLOW_FALLBACK_MODEL || "Qwen/Qwen3-8B";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
 const MAX_TOKENS = 800;
 
@@ -136,8 +137,15 @@ async function callSiliconFlow(apiKey, model, prompt) {
       return { ok: false, content: "", error: `http_${response.status}: ${safeErrorText(raw).slice(0, 200)}` };
     }
     const payload = JSON.parse(raw);
-    const content = payload.choices?.[0]?.message?.content || "{}";
-    return { ok: true, content, error: "" };
+    const message = payload.choices?.[0]?.message || {};
+    // Qwen3 系列思考模式下 content 可能为空，实际结果在 reasoning_content 中
+    // 此时从 reasoning_content 中提取 JSON 片段作为回退
+    let content = message.content || "";
+    if (!content && message.reasoning_content) {
+      const jsonMatch = message.reasoning_content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) content = jsonMatch[0];
+    }
+    return { ok: true, content: content || "{}", error: "" };
   } catch (error) {
     clearTimeout(timeout);
     return { ok: false, content: "", error: `${error.name || "Unknown"}: ${safeErrorText(error.message)}` };

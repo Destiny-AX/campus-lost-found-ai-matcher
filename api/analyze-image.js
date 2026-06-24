@@ -109,7 +109,13 @@ module.exports = async function handler(req, res) {
 
     try {
       const payload = JSON.parse(raw);
-      const content = payload.choices?.[0]?.message?.content || "{}";
+      const message = payload.choices?.[0]?.message || {};
+      // 兼容 Qwen3 思考模式：content 为空时回退 reasoning_content
+      let content = message.content || "";
+      if (!content && message.reasoning_content) {
+        const jsonMatch = message.reasoning_content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) content = jsonMatch[0];
+      }
       sendJson(res, 200, {
         model: MODEL,
         semantic: normalizeSemanticResult(parsePossiblyFencedJson(content)),
