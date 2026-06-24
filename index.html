@@ -64,7 +64,10 @@
 
         <section class="mobile-title" aria-label="移动端标题">
           <div class="mobile-brand-mark" aria-hidden="true"><img src="/images/logo.png" alt="拾寻" /></div>
-          <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
+          <div class="mobile-title-actions">
+            <button class="ghost-button mobile-verify-btn" id="mobileVerifyBtn" type="button" hidden>实名认证</button>
+            <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
+          </div>
         </section>
 
         <!-- ============== 视图：失物广场 ============== -->
@@ -525,6 +528,7 @@
             <span>身份证末 4 位</span>
             <input name="id_card_last4" required pattern="\d{4}" maxlength="4" placeholder="0000" />
           </label>
+          <div class="form-error" id="verifyError" role="alert"></div>
           <div class="login-actions">
             <button type="button" class="text-button" id="closeVerifyBtn">取消</button>
             <button type="submit" class="primary-action">提交认证</button>

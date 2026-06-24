@@ -155,9 +155,9 @@ function cacheElements() {
     "itemList", "searchInput", "categoryFilter", "queryRecord", "selectedRecord",
     "matchResults", "publishForm", "imageInput", "dropZone", "imagePreview",
     "featurePreview", "metricGrid", "detailDialog", "detailContent",
-    "closeDialog", "topAuthBtn", "topVerifyBtn", "mobileAuthBtn",
+    "closeDialog", "topAuthBtn", "topVerifyBtn", "mobileAuthBtn", "mobileVerifyBtn",
     "loginDialog", "loginForm", "loginGuestBtn", "closeLoginBtn",
-    "verifyDialog", "verifyForm", "closeVerifyBtn",
+    "verifyDialog", "verifyForm", "closeVerifyBtn", "verifyError",
     "pickupDialog", "pickupForm", "closePickupBtn",
     "aiInput", "aiExtractBtn", "aiExtractHint",
     "itemStatusGroup", "custodyPicker", "custodyPointSelect", "claimQuestionGroup",
@@ -263,7 +263,8 @@ function bindEvents() {
   on(els.loginGuestBtn, "click", handleGuestLogin);
 
   // 实名认证
-  on(els.topVerifyBtn, "click", () => els.verifyDialog?.showModal());
+  on(els.topVerifyBtn, "click", () => { if (els.verifyError) els.verifyError.textContent = ""; els.verifyDialog?.showModal(); });
+  on(els.mobileVerifyBtn, "click", () => { if (els.verifyError) els.verifyError.textContent = ""; els.verifyDialog?.showModal(); });
   on(els.closeVerifyBtn, "click", () => els.verifyDialog?.close());
   on(els.verifyForm, "submit", handleVerifyIdentity);
 
@@ -416,6 +417,7 @@ function updateAuthUI() {
     els.mobileAuthBtn.onclick = () => autoLoginDemo();
   }
   els.topVerifyBtn.hidden = !(loggedIn && !currentUser.verified);
+  if (els.mobileVerifyBtn) els.mobileVerifyBtn.hidden = !(loggedIn && !currentUser.verified);
 }
 
 function openUserDialog() {
@@ -491,13 +493,31 @@ async function handleVerifyIdentity(event) {
   event.preventDefault();
   const form = new FormData(els.verifyForm);
   const data = Object.fromEntries(form.entries());
+  const errorEl = els.verifyError;
+  const submitBtn = els.verifyForm.querySelector('button[type="submit"]');
+
+  // 清空之前的错误提示
+  if (errorEl) errorEl.textContent = "";
+  // loading 状态：按钮禁用 + 文字变化，让用户知道正在处理
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "认证中..."; }
+
+  // 15 秒超时控制，避免网络卡顿时一直等待
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const response = await fetch("/api/auth?action=verify-identity", {
       method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(data),
+      signal: controller.signal,
     });
     const payload = await response.json();
-    if (!response.ok) { showToast(payload.error || "认证失败", "error"); return; }
+    if (!response.ok) {
+      // 在 dialog 内显示错误（toast 会被 dialog top layer 遮挡）
+      const msg = payload.error || "认证失败";
+      if (errorEl) errorEl.textContent = msg;
+      showToast(msg, "error");
+      return;
+    }
     localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
     const jwtPayload3 = decodeJwtPayload(payload.token);
     currentUser = { ...jwtPayload3, ...payload.user, exp: payload.user?.exp ?? 0 };
@@ -506,7 +526,14 @@ async function handleVerifyIdentity(event) {
     els.verifyDialog.close();
     showToast("实名认证成功！现在可以查看完整信息。", "success");
     setTimeout(() => window.location.reload(), 300);
-  } catch (e) { showToast("网络错误", "error"); }
+  } catch (e) {
+    const msg = e.name === "AbortError" ? "请求超时，请重试" : "网络错误";
+    if (errorEl) errorEl.textContent = msg;
+    showToast(msg, "error");
+  } finally {
+    clearTimeout(timeout);
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "提交认证"; }
+  }
 }
 
 // ============== AI 结构化输入 ==============

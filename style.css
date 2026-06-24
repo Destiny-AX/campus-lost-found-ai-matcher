@@ -914,6 +914,13 @@ body {
 .login-form input:focus { border-color: var(--blue); }
 .login-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
+/* 表单内错误提示（用于 dialog 内，避免被 toast 的 z-index 问题影响） */
+.form-error {
+  color: var(--red); font-size: 13px; min-height: 18px;
+  margin: 8px 0; padding: 0;
+}
+.form-error:empty { margin: 0; min-height: 0; }
+
 /* ============== Notifications — 更精致的入场动效 ============== */
 .toast-host {
   position: fixed; top: 20px; right: 20px; z-index: 9999;
@@ -1471,6 +1478,8 @@ body {
   .mobile-title-text h1 { font-size: 18px; }
   .mobile-title-text p { font-size: 11px; color: var(--text2); }
   .mobile-auth-btn { margin-left: auto; }
+  .mobile-title-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .mobile-verify-btn { font-size: 12px; padding: 6px 12px; }
 
   .top-bar { display: none; }
 
