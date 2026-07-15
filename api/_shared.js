@@ -57,7 +57,7 @@ function getSiliconFlowApiKey() {
   ).trim();
 }
 
-// 获取或派生 JWT 签名密钥（无配置时用 Supabase Key 派生，保证 demo 可用）
+// 获取或派生 JWT 签名密钥。未配置时仅为本地演示生成进程级随机密钥。
 let _jwtSecretCache = null;
 function getJwtSecret() {
   if (_jwtSecretCache) return _jwtSecretCache;
@@ -65,7 +65,8 @@ function getJwtSecret() {
   if (explicit) { _jwtSecretCache = explicit; return explicit; }
   const config = getSupabaseConfig();
   if (config?.key) { _jwtSecretCache = crypto.createHash("sha256").update("shiyun-v2:" + config.key).digest("hex"); return _jwtSecretCache; }
-  _jwtSecretCache = "shiyun-v2-demo-fallback-secret-do-not-use-in-production";
+  _jwtSecretCache = crypto.randomBytes(32).toString("hex");
+  console.warn("[security] LOST_FOUND_JWT_SECRET 未配置：已生成临时密钥，服务重启后登录态会失效。");
   return _jwtSecretCache;
 }
 
@@ -223,12 +224,13 @@ function checkRateLimit(key, windowMs = 60000, maxRequests = 10) {
 }
 
 // 定期清理过期的限流记录（每5分钟）
-setInterval(() => {
+const rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, record] of _rateLimitMap.entries()) {
     if (now > record.resetAt) _rateLimitMap.delete(key);
   }
 }, 5 * 60 * 1000);
+rateLimitCleanupTimer.unref?.();
 
 // 生成防混淆取件码字符（剔除 0/O/1/I/L）
 const PICKUP_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

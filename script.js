@@ -6,6 +6,9 @@
 
 // ============== 常量与配置 ==============
 const WEIGHTS = { category: 0.13, color: 0.08, location: 0.14, time: 0.11, text: 0.14, image: 0.2, semantic: 0.2 };
+const DIMENSION_LABELS = { category: "类别", color: "颜色", location: "地点", time: "时间", text: "文本", image: "图像", semantic: "语义" };
+let runtimeDataSource = "detecting";
+let matchRenderNonce = 0;
 
 // 等级称号映射
 const LEVEL_TITLES = {
@@ -97,6 +100,7 @@ function decodeJwtPayload(token) {
 
 // ============== 全局状态 ==============
 let records = [];
+let recordsLoadState = { status: "loading", error: "" };
 let activeFilter = "all";
 let activeCategory = "all"; // 当前选中的类别筛选
 let uploadedFeature = null;
@@ -136,6 +140,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   renderAll();
+  await prepareVerificationView();
   updateNotifyBadge(0);
   startNotifyPoll();
   checkHighMatchAlerts();
@@ -149,6 +154,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
+async function prepareVerificationView() {
+  const mode = new URLSearchParams(window.location.search).get("verify_view");
+  if (!mode) return;
+  document.body.dataset.verifyView = mode;
+  if (!currentUser) await autoLoginDemo();
+  if (mode === "home") { switchView("home"); return; }
+  if (mode === "publish" || mode === "degraded") {
+    switchView("publish");
+    els.aiInput.value = "昨晚在中国传媒大学图书馆丢了一个黑色 AirPods Pro，充电盒有一道划痕。";
+    await handleAiExtract();
+    return;
+  }
+  if (mode === "image") {
+    switchView("publish");
+    return;
+  }
+  if (mode === "match") {
+    switchView("match");
+    await renderMatchView();
+    return;
+  }
+  if (mode === "privacy") {
+    switchView("home");
+    const found = records.find((record) => record.type === "found" && record.is_fuzzy);
+    if (found) openDetail(found.id);
+    return;
+  }
+  if (mode === "evaluation") { switchView("stats"); }
+}
 // ============== DOM 缓存 ==============
 function cacheElements() {
   const ids = [
@@ -159,7 +193,8 @@ function cacheElements() {
     "loginDialog", "loginForm", "loginGuestBtn", "closeLoginBtn",
     "verifyDialog", "verifyForm", "closeVerifyBtn", "verifyError",
     "pickupDialog", "pickupForm", "closePickupBtn",
-    "aiInput", "aiExtractBtn", "aiExtractHint",
+    "aiInput", "aiExtractBtn", "aiExtractHint", "fieldConfidencePanel", "fieldConfidenceList",
+    "extractionSourceNotice", "extractionSourceBadge", "aiFieldConfirmation", "confirmExtractedFields",
     "itemStatusGroup", "custodyPicker", "custodyPointSelect", "claimQuestionGroup",
     "notifyList", "markAllReadBtn", "refreshNotifyBtn", "notifyBadge", "notifyBadgeMobile",
     "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
@@ -552,31 +587,35 @@ async function handleAiExtract() {
   if (aiExtractDebounce) return;
   aiExtractDebounce = true;
   els.aiExtractBtn.disabled = true;
-  els.aiExtractBtn.querySelector(".ai-extract-text").textContent = "AI 正在分析...";
+  els.aiExtractBtn.querySelector(".ai-extract-text").textContent = "正在结构化…";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
     const response = await fetch("/api/structured-input", {
       method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text }), signal: controller.signal,
     });
-    const payload = await response.json();
-    if (!response.ok || !payload.structured) { showToast("AI 分析失败，请手动填写", "error"); return; }
-    const s = payload.structured;
-    fillFormFields(s);
-    // 根据来源构建提示信息
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.structured) {
+      showToast(payload.error || "结构化失败，请手动填写", "error");
+      return;
+    }
+    const structured = payload.structured;
+    fillFormFields(structured);
+    renderFieldConfidence(structured, payload);
     const isAi = payload.source === "ai";
     const modelLabel = payload.ai_model ? `，模型：${payload.ai_model.split("/").pop()}` : "";
     if (!isAi) {
-      // AI 不可用，降级为本地提取
-      const reason = payload.ai_error || "未知原因";
-      showToast(`AI 暂不可用（${reason}），已使用本地提取，精度较低建议手动修正`, "warning");
-    } else if (s.title && (s.title.length > 15 || /^(?:在|丢了|捡到|一个)/.test(s.title))) {
-      showToast(`AI 已填表${modelLabel}，但 title "${s.title}" 可能需要手动修正`, "warning");
+      showToast("当前为离线规则降级；待确认与未识别字段必须人工补充", "warning");
+    } else if (structured.requires_confirmation) {
+      showToast(`模型已预填${modelLabel}，仍有字段需要人工确认`, "warning");
     } else {
-      showToast(`AI 已填表（置信度 ${Math.round(s.confidence * 100)}%${modelLabel}）`, "success");
+      showToast(`模型已预填（整体置信度 ${Math.round((structured.confidence || 0) * 100)}%${modelLabel}）`, "success");
     }
-  } catch (e) {
-    showToast("网络错误，请手动填写", "error");
+  } catch (error) {
+    showToast(error.name === "AbortError" ? "结构化请求超时，请手动填写" : "网络错误，请手动填写", "error");
   } finally {
+    clearTimeout(timeout);
     aiExtractDebounce = null;
     els.aiExtractBtn.disabled = false;
     els.aiExtractBtn.querySelector(".ai-extract-text").textContent = "让 AI 自动填表";
@@ -590,39 +629,66 @@ function fillFormFields(s) {
     if (typeLabel) typeLabel.click();
   }
   const titleInput = form.querySelector('input[name="title"]');
-  if (titleInput && s.title) titleInput.value = s.title;
+  if (titleInput) titleInput.value = s.title || "";
   const categorySelect = form.querySelector('select[name="category"]');
-  if (categorySelect && s.category) setSelectValue(categorySelect, s.category);
+  if (categorySelect) categorySelect.value = [...categorySelect.options].some((option) => option.value === s.category) ? s.category : "";
   const colorSelect = form.querySelector('select[name="color"]');
-  if (colorSelect && s.color) setSelectValue(colorSelect, s.color);
-  const locationInput = form.querySelector('input[name="location"]');
-  if (locationInput && s.location) locationInput.value = s.location;
+  if (colorSelect) colorSelect.value = [...colorSelect.options].some((option) => option.value === s.color) ? s.color : "";
 
-  // 结构化地点自动填充级联选择器
   const districtSelect = form.querySelector('select[name="district"]');
   const streetSelect = form.querySelector('select[name="street"]');
   const detailInput = form.querySelector('input[name="detail_location"]');
-  if (districtSelect && s.district) {
-    setSelectValue(districtSelect, s.district);
-    const event = new Event("change");
-    districtSelect.dispatchEvent(event);
+  if (districtSelect) {
+    districtSelect.value = s.district || "";
+    districtSelect.dispatchEvent(new Event("change"));
   }
-  if (streetSelect && s.street) {
-    setTimeout(() => { setSelectValue(streetSelect, s.street); }, 50);
-  }
-  if (detailInput && s.detail_location) {
-    detailInput.value = s.detail_location;
-  }
+  if (streetSelect && s.street) setTimeout(() => { setSelectValue(streetSelect, s.street); }, 50);
+  if (detailInput) detailInput.value = s.detail_location || s.location || "";
 
   const timeInput = form.querySelector('input[name="time"]');
-  if (timeInput && s.time) timeInput.value = s.time;
+  if (timeInput) timeInput.value = s.time || "";
+  const contactInput = form.querySelector('input[name="contact"]');
+  if (contactInput) contactInput.value = s.contact || "";
   const descTextarea = form.querySelector('textarea[name="description"]');
-  if (descTextarea && s.description) descTextarea.value = s.description;
+  if (descTextarea) descTextarea.value = s.description || "";
   if (s.type === "found") els.itemStatusGroup.hidden = false;
   if (s.item_status) {
     const statusLabel = form.querySelector(`.status-option:has(input[name="item_status"][value="${s.item_status}"])`);
     if (statusLabel) statusLabel.click();
     els.custodyPicker.hidden = s.item_status !== "custody";
+  }
+  applyFieldStatusDecorations(s.field_status || {});
+  if (els.aiFieldConfirmation) els.aiFieldConfirmation.hidden = false;
+  if (els.confirmExtractedFields) els.confirmExtractedFields.checked = false;
+}
+
+function renderFieldConfidence(structured, payload) {
+  if (!els.fieldConfidencePanel || !els.fieldConfidenceList) return;
+  const labels = { type: "事件类型", item: "物品", title: "标题", category: "类别", color: "颜色", location: "地点", time: "时间", contact: "联系方式", features: "特征" };
+  const statuses = structured.field_status || {};
+  els.fieldConfidenceList.innerHTML = Object.entries(labels).map(([key, label]) => {
+    const status = statuses[key] || "未识别";
+    const className = status === "高置信" ? "high" : status === "待确认" ? "pending" : "missing";
+    return `<div class="field-confidence-item"><span>${label}</span><span class="field-status ${className}">${status}</span></div>`;
+  }).join("");
+  const isAi = payload.source === "ai";
+  els.extractionSourceBadge.textContent = isAi ? "真实模型返回" : "离线规则降级";
+  const timeNote = structured.raw_time_expression
+    ? `原始时间“${structured.raw_time_expression}”，时区 ${structured.time_zone || "Asia/Shanghai"}${structured.time_needs_confirmation ? "，需确认具体时刻" : ""}。`
+    : "未识别可靠时间，请手动填写。";
+  els.extractionSourceNotice.textContent = `${isAi ? "模型结果" : "规则结果"}仅用于预填。${timeNote}`;
+  els.fieldConfidencePanel.hidden = false;
+}
+
+function applyFieldStatusDecorations(statuses) {
+  const selectors = {
+    title: 'input[name="title"]', category: 'select[name="category"]', color: 'select[name="color"]',
+    location: 'input[name="detail_location"]', time: 'input[name="time"]', contact: 'input[name="contact"]',
+    features: 'textarea[name="description"]',
+  };
+  for (const [field, selector] of Object.entries(selectors)) {
+    const element = els.publishForm.querySelector(selector);
+    if (element) element.dataset.fieldStatus = statuses[field] || "未识别";
   }
 }
 
@@ -633,22 +699,22 @@ function setSelectValue(select, value) {
 
 // ============== 数据加载 ==============
 // 记录列表缓存：30秒 TTL，避免频繁刷新重复请求后端
-const RECORDS_CACHE_KEY = "shixun_records_cache";
+const RECORDS_CACHE_KEY = "shixun_ai_job_records_cache_v1";
 const RECORDS_CACHE_TTL = 30000; // 30秒
 
 function getRecordsCache() {
   try {
     const cached = localStorage.getItem(RECORDS_CACHE_KEY);
     if (!cached) return null;
-    const { timestamp, records } = JSON.parse(cached);
-    if (Date.now() - timestamp > RECORDS_CACHE_TTL) return null;
-    return records;
+    const payload = JSON.parse(cached);
+    if (Date.now() - payload.timestamp > RECORDS_CACHE_TTL) return null;
+    return { records: payload.records, source: payload.source || "cache" };
   } catch (e) { return null; }
 }
 
-function setRecordsCache(records) {
+function setRecordsCache(records, source) {
   try {
-    localStorage.setItem(RECORDS_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), records }));
+    localStorage.setItem(RECORDS_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), records, source }));
   } catch (e) { /* localStorage 满或不可用，静默 */ }
 }
 
@@ -656,22 +722,34 @@ function clearRecordsCache() {
   try { localStorage.removeItem(RECORDS_CACHE_KEY); } catch (e) { /* 静默 */ }
 }
 
+function updateRuntimeStatus() {
+  const el = document.getElementById("runtimeStatus");
+  if (!el) return;
+  el.textContent = runtimeDataSource === "demo_memory"
+    ? "数据源：内存示例（Mock，可离线运行）"
+    : runtimeDataSource === "supabase"
+      ? "数据源：Supabase（真实持久化接口）"
+      : "正在检测数据源…";
+}
+
 async function loadRecords() {
+  recordsLoadState = { status: "loading", error: "" };
+  renderItemList();
   try {
     const remoteRecords = await fetchPersistedRecords();
+    recordsLoadState = { status: "loaded", error: "" };
     return remoteRecords;
-  } catch (e) {
-    console.error("loadRecords 失败:", e);
+  } catch (error) {
+    console.error("loadRecords 失败:", error);
+    recordsLoadState = { status: "error", error: error.message || "记录加载失败" };
     return [];
   }
 }
 
 async function hydrateRecord(record) {
   try {
-    // 远程记录可能没有 visualSeed，提供默认值
-    const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
-    const seed = record.visualSeed || defaultSeed;
-    const imageData = record.imageData || createSyntheticImage(seed, record.title);
+    // 仅展示记录真实关联的图片；缺图时使用中性占位，不生成卡通示意图。
+    const imageData = record.imageData || "";
     // 懒加载：已有 imageFeature 直接用，没有的设为 null，匹配时按需提取
     // 这样初始加载时不触发 Canvas 计算，大幅减少 hydrate 耗时
     const imageFeature = record.imageFeature || null;
@@ -693,20 +771,31 @@ async function ensureImageFeature(record) {
 }
 
 async function fetchPersistedRecords() {
-  // 1. 先检查缓存，命中则直接返回（30秒内避免重复请求）
   const cached = getRecordsCache();
-  if (cached) return cached;
-  // 2. 发起网络请求
+  if (cached) {
+    runtimeDataSource = cached.source;
+    updateRuntimeStatus();
+    return cached.records;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetch("/api/records", { headers: authHeaders() });
-    if (!response.ok) return [];
-    const payload = await response.json();
+    const response = await fetch("/api/records", { headers: authHeaders(), signal: controller.signal });
+    let payload = {};
+    try { payload = await response.json(); } catch (error) { /* 由下面统一报错 */ }
+    if (!response.ok) throw new Error(payload.error || `记录接口返回 ${response.status}`);
+    runtimeDataSource = payload.source || "supabase";
+    updateRuntimeStatus();
     const list = Array.isArray(payload.records) ? payload.records.filter(Boolean) : [];
     const hydrated = await Promise.all(list.map(hydrateRecord));
-    // 3. 写入缓存
-    setRecordsCache(hydrated);
+    setRecordsCache(hydrated, runtimeDataSource);
     return hydrated;
-  } catch (e) { return []; }
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("记录加载超时，请检查本地服务或网络后重试");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function loadCustodyPoints() {
@@ -790,6 +879,17 @@ function renderCategoryChips() {
 }
 
 function renderItemList() {
+  if (!els.itemList) return;
+  if (recordsLoadState.status === "loading") {
+    els.itemList.innerHTML = `<div class="loading-state"><span class="loading-spinner" aria-hidden="true"></span><strong>正在加载记录…</strong><p>正在请求实际数据源，不使用静态数字替代。</p></div>`;
+    return;
+  }
+  if (recordsLoadState.status === "error") {
+    els.itemList.innerHTML = `<div class="error-state"><strong>记录加载失败</strong><p>${escapeHtml(recordsLoadState.error)}</p><button class="primary-action retry-button" id="retryRecordsBtn" type="button">重新加载</button></div>`;
+    document.querySelector("#retryRecordsBtn")?.addEventListener("click", retryLoadRecords);
+    updateHomeStatsFromList([]);
+    return;
+  }
   const query = normalizeText(els.searchInput.value);
   const category = activeCategory;
   const district = els.filterDistrict?.value || "all";
@@ -808,11 +908,19 @@ function renderItemList() {
   });
   els.itemList.innerHTML = list.length
     ? list.map((r) => renderRecordCard(r)).join("")
-    : `<div class="empty-state"><strong>没有找到符合条件的信息</strong><p>尝试调整筛选条件或搜索关键词，看看其他物品吧</p></div>`;
+    : `<div class="empty-state"><strong>当前筛选没有结果</strong><p>数据已加载成功；请调整筛选条件或发布一条新记录。</p></div>`;
   bindCardActions();
   updateHomeStatsFromList(list);
   renderActiveFilters();
 }
+
+async function retryLoadRecords() {
+  clearRecordsCache();
+  records = await loadRecords();
+  renderAll();
+}
+
+// 渲染当前激活的筛选标签
 
 // 渲染当前激活的筛选标签
 function renderActiveFilters() {
@@ -931,6 +1039,13 @@ function clearFilter(type) {
   renderItemList();
 }
 
+function renderRecordImage(record, unavailableLabel = "暂无实物图片") {
+  const src = String(record?.imageData || "").trim();
+  const alt = escapeHtml(record?.title || "物品图片");
+  if (!src) return `<span class="image-unavailable">${escapeHtml(unavailableLabel)}</span>`;
+  return `<img src="${escapeHtml(src)}" alt="${alt}" onerror="this.hidden=true;this.nextElementSibling.hidden=false;" /><span class="image-unavailable" hidden>图片暂不可用</span>`;
+}
+
 function renderRecordCard(record) {
   const best = getBestMatch(record);
   const isOwn = isOwnRecord(record);
@@ -939,11 +1054,10 @@ function renderRecordCard(record) {
   const institutionBadge = record.item_status === "institution" ? `<span class="meta-pill institution-pill">🏛️ 官方</span>` : "";
   const custodyBadge = record.item_status === "custody" ? `<span class="meta-pill custody-pill">🤝 代保管</span>` : "";
   const fuzzyBadge = fuzzy ? `<span class="meta-pill fuzzy-pill">🔒 模糊化</span>` : "";
+
   const ownActions = isOwn ? `<button class="ghost-button" data-edit-id="${record.id}" type="button">编辑</button><button class="danger-button" data-delete-id="${record.id}" type="button">删除</button>` : "";
   const adminActions = isAdmin() && !isOwn ? `<button class="danger-button" data-admin-delete-id="${record.id}" type="button">管理员删除</button>` : "";
-  const defaultSeed = { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" };
-  const imgSrc = record.imageData || createSyntheticImage(record.visualSeed || defaultSeed, record.title);
-  const fallbackSrc = createSyntheticImage(record.visualSeed || defaultSeed, record.title);
+
   // 优先使用结构化地点展示
   const locationDisplay = record.district && record.street
     ? `${escapeHtml(record.district)} · ${escapeHtml(record.street)}`
@@ -951,7 +1065,7 @@ function renderRecordCard(record) {
   return `
     <article class="card${fuzzy ? " is-fuzzy" : ""}">
       <span class="thumb">
-        <img src="${imgSrc}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} onerror="this.onerror=null;this.src='${fallbackSrc}';" />
+        ${renderRecordImage(record)}
         <span class="badge-row">
           <span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span>
           <span class="match-badge">匹配 ${Math.round(best.score)}%</span>
@@ -1006,16 +1120,21 @@ function renderQueryOptions() {
     .join("");
 }
 
-function renderMatchView() {
+async function renderMatchView() {
   if (!records.length) return;
+  const nonce = ++matchRenderNonce;
   const queryId = els.queryRecord.value || records[0].id;
   const queryRecord = records.find((r) => r.id === queryId) || records[0];
+  const comparableRecords = records.filter((record) => record.id !== queryRecord.id && record.type !== queryRecord.type);
   els.queryRecord.value = queryRecord.id;
   els.selectedRecord.innerHTML = renderMiniRecord(queryRecord);
+  els.matchResults.innerHTML = `<div class="empty-state"><strong>正在准备视觉证据</strong><p>按需提取本地图像特征，失败时自动标记为缺失。</p></div>`;
+  await Promise.all([queryRecord, ...comparableRecords].map((record) => ensureImageFeature(record).catch(() => null)));
+  if (nonce !== matchRenderNonce) return;
   const matches = getMatchesFor(queryRecord).slice(0, 5);
   els.matchResults.innerHTML = matches.length
     ? matches.map((m) => renderMatchItem(m.record, m.result)).join("")
-    : `<div class="empty-state"><strong>当前没有可匹配的信息</strong><p>发布一条信息，AI 会为你自动寻找匹配线索</p></div>`;
+    : `<div class="empty-state"><strong>当前没有可匹配的信息</strong><p>发布一条信息，系统会为你寻找候选线索</p></div>`;
   els.matchResults.querySelectorAll("[data-detail-id]").forEach((btn) => {
     btn.addEventListener("click", () => openDetail(btn.dataset.detailId));
   });
@@ -1025,15 +1144,17 @@ function renderMatchView() {
       if (record) showMatchContact(record);
     });
   });
-  // 未实名的"实名后联系"按钮：点击时弹出认证引导
   els.matchResults.querySelectorAll(".contact-disabled-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      showToast("请先完成实名认证以查看联系方式", "info");
-      setTimeout(() => els.verifyDialog.showModal(), 500);
+      if (currentUser?.verified) {
+        showToast("招领信息需认领审核通过后解锁联系方式", "info");
+      } else {
+        showToast("请先完成模拟实名，再提交认领申请", "info");
+        setTimeout(() => els.verifyDialog.showModal(), 500);
+      }
     });
   });
 }
-
 function showMatchContact(record) {
   if (!currentUser) {
     showToast("请先登录", "info");
@@ -1052,9 +1173,8 @@ function showMatchContact(record) {
  
 
 function renderMiniRecord(record) {
-  const fuzzy = record.is_fuzzy;
   return `<div class="mini-record">
-    <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
+    <span class="mini-record-media">${renderRecordImage(record)}</span>
     <div><strong>${escapeHtml(record.title)}</strong>
     <div class="meta-line">${record.type === "lost" ? "寻物" : "招领"} · ${escapeHtml(record.category)} · ${escapeHtml(record.color)}</div>
     <div class="meta-line">${escapeHtml(record.location)} · ${formatTime(record.time)}</div></div>
@@ -1065,11 +1185,21 @@ function renderMatchItem(record, result) {
   const parts = result.breakdown;
   const score = Math.round(result.score);
   const scoreColor = score >= 80 ? "#34c759" : score >= 60 ? "#ff9500" : "#0071e3";
-  const ringOffset = 100 - score;
   const fuzzy = record.is_fuzzy;
+  const dimensionRow = (key, label, color) => {
+    const value = parts[key];
+    const available = Number.isFinite(value);
+    const width = available ? Math.round(value) : 0;
+    return `<div class="match-dimension" style="--dim-width:${width}%;--dim-color:${color}"><span class="dim-label">${label}</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${available ? `${width}%` : "缺失"}</span></div>`;
+  };
+  const contactAction = !fuzzy
+    ? `<button class="ghost-button" data-contact-id="${record.id}" type="button">联系对方</button>`
+    : currentUser?.verified
+      ? `<button class="ghost-button contact-disabled-btn" type="button" aria-disabled="true">认领通过后解锁</button>`
+      : `<button class="ghost-button contact-disabled-btn" type="button" aria-disabled="true">模拟实名后申请</button>`;
   return `<article class="match-item">
     <div class="match-item-media">
-      <img src="${record.imageData}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} />
+      ${renderRecordImage(record)}
       <div class="match-score-ring" style="--score:${score};--ring-color:${scoreColor}">
         <svg viewBox="0 0 36 36">
           <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
@@ -1081,39 +1211,46 @@ function renderMatchItem(record, result) {
     <div class="match-item-body">
       <div class="meta-line">
         <span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span>
-        ${score >= 80 ? '<span class="match-recommend">🔥 强烈推荐</span>' : ''}
+        ${score >= 80 && result.coverage >= 65 ? '<span class="match-recommend">🔥 高排序候选</span>' : ""}
       </div>
       <h4>${escapeHtml(record.title)}</h4>
+      <div class="evidence-coverage">证据覆盖：<strong>${Math.round(result.coverage)}%</strong> · ${result.missingDimensions.length ? `缺失 ${result.missingDimensions.map((key) => DIMENSION_LABELS[key]).join("、")}` : "字段完整"}</div>
       <div class="match-dimensions">
-        <div class="match-dimension" style="--dim-width:${parts.category}%;--dim-color:#0071e3"><span class="dim-label">类别</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.category)}%</span></div>
-        <div class="match-dimension" style="--dim-width:${parts.color}%;--dim-color:#af52de"><span class="dim-label">颜色</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.color)}%</span></div>
-        <div class="match-dimension" style="--dim-width:${parts.location}%;--dim-color:#34c759"><span class="dim-label">地点</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.location)}%</span></div>
-        <div class="match-dimension" style="--dim-width:${parts.time}%;--dim-color:#ff9500"><span class="dim-label">时间</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.time)}%</span></div>
-        <div class="match-dimension" style="--dim-width:${parts.text}%;--dim-color:#ff3b30"><span class="dim-label">文本</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.text)}%</span></div>
-        <div class="match-dimension" style="--dim-width:${parts.image}%;--dim-color:#5856d6"><span class="dim-label">图像</span><div class="dim-bar"><div class="dim-fill"></div></div><span class="dim-val">${Math.round(parts.image)}%</span></div>
+        ${dimensionRow("category", "类别", "#0071e3")}
+        ${dimensionRow("color", "颜色", "#af52de")}
+        ${dimensionRow("location", "地点", "#34c759")}
+        ${dimensionRow("time", "时间", "#ff9500")}
+        ${dimensionRow("text", "文本", "#ff3b30")}
+        ${dimensionRow("image", "图像", "#5856d6")}
+        ${dimensionRow("semantic", "语义", "#00a6a6")}
       </div>
       <ul class="reason-list">${result.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
       <div class="card-actions">
         <button class="ghost-button" data-detail-id="${record.id}" type="button">查看详情</button>
-        ${currentUser?.verified ? `<button class="ghost-button" data-contact-id="${record.id}" type="button">联系对方</button>` : `<button class="ghost-button contact-disabled-btn" type="button" title="请先完成实名认证后查看联系方式" aria-disabled="true">实名后联系</button>`}
+        ${contactAction}
       </div>
     </div>
   </article>`;
 }
 
 function renderStats() {
-  // 数据概览页统计（原有逻辑）
+  if (!els.metricGrid) return;
+  if (recordsLoadState.status !== "loaded") {
+    const label = recordsLoadState.status === "error" ? "数据加载失败" : "数据加载中";
+    els.metricGrid.innerHTML = `<div class="metric-card"><strong>${label}</strong><span>—</span></div>`;
+    updateHomeStatsFromList([]);
+    return;
+  }
   const total = records.length;
   const today = records.filter((r) => isToday(r.time)).length;
   const strong = records.filter((r) => getBestMatch(r).score >= 80).length;
   const withSemantic = records.filter((r) => r.semantic).length;
-  const metrics = [["发布总数", total], ["今日新增", today], ["高匹配线索", strong], ["语义识别记录", withSemantic]];
-  els.metricGrid.innerHTML = metrics
-    .map(([label, value]) => `<div class="metric-card"><strong>${label}</strong><span>${value}</span></div>`).join("");
-
-  // 主界面成就统计面板
+  const metrics = [["记录总数（当前数据源）", total], ["今日记录", today], ["高排序候选", strong], ["含语义字段", withSemantic]];
+  els.metricGrid.innerHTML = metrics.map(([label, value]) => `<div class="metric-card"><strong>${label}</strong><span>${value}</span></div>`).join("");
   updateHomeStats();
 }
+
+// 更新主界面成就统计面板
 
 // 更新主界面成就统计面板（基于全部记录）
 function updateHomeStats() {
@@ -1122,17 +1259,21 @@ function updateHomeStats() {
 
 // 基于指定记录列表更新统计面板
 function updateHomeStatsFromList(list) {
+  if (recordsLoadState.status !== "loaded") {
+    ["statTotalRecovered", "statHelpedOthers", "statActiveItems", "statMyCredit"].forEach((id) => { const element = document.getElementById(id); if (element) element.textContent = "—"; });
+    return;
+  }
   // 已找回：状态为"已找回"或"已认领"的记录数
   const recovered = list.filter((r) => r.status === "已找回" || r.status === "已认领").length;
   // 帮他人找回：当前用户是招领发布者且已被认领的记录
   const currentId = currentUser?.sub;
   const helpedOthers = currentId
     ? list.filter((r) => r.type === "found" && r.owner_id === currentId && r.status === "已认领").length
-    : Math.floor(recovered * 0.6); // 未登录时显示模拟数据
+    : 0;
   // 进行中：待找回 + 待认领
   const active = list.filter((r) => r.status === "待找回" || r.status === "待认领").length;
   // 信用分（不随筛选变化）
-  const credit = currentUser ? (currentUser.credit_score || 100) : 100;
+  const credit = currentUser ? (currentUser.credit_score ?? 0) : 0;
 
   animateNumber("statTotalRecovered", recovered);
   animateNumber("statHelpedOthers", helpedOthers);
@@ -1145,7 +1286,10 @@ function animateNumber(elementId, targetValue) {
   const el = document.getElementById(elementId);
   if (!el) return;
   const startValue = parseInt(el.textContent, 10) || 0;
-  if (startValue === targetValue) return;
+  if (startValue === targetValue) {
+    el.textContent = String(targetValue);
+    return;
+  }
 
   const duration = 800;
   const startTime = performance.now();
@@ -1280,7 +1424,9 @@ function openDetail(id) {
   const adminActionsDetail = isAdmin() && !isOwn ? `<button class="danger-button" data-admin-delete-id="${record.id}" type="button">管理员删除</button>` : "";
 
   const verifyPrompt = fuzzy
-    ? `<div class="fuzzy-notice">🔒 部分信息已模糊化处理，<button class="text-button verify-trigger" type="button">完成实名认证</button>后可查看完整信息。</div>`
+    ? currentUser?.verified
+      ? `<div class="fuzzy-notice">🔒 招领信息需提交认领申请，并由发布者审核通过后解锁完整信息。</div>`
+      : `<div class="fuzzy-notice">🔒 部分信息已模糊化处理，<button class="text-button verify-trigger" type="button">完成模拟实名</button>后可申请认领。</div>`
     : "";
 
   let contactDisplay;
@@ -1315,6 +1461,8 @@ function openDetail(id) {
   let claimSection = "";
   if (!currentUser) {
     claimSection = `<div class="claim-section"><div class="claim-hint">登录后可申请认领或查看归还进度</div></div>`;
+  } else if (!isOwn && record.type === "found" && record.status === "待认领" && !currentUser.verified) {
+    claimSection = `<div class="claim-section"><div class="claim-hint">请先完成模拟实名，再提交认领申请</div><button class="primary-action verify-trigger" type="button">完成模拟实名</button></div>`;
   } else if (!isOwn && record.type === "found" && record.status === "待认领") {
     const hasQuestion = !!record.claim_question;
     const questionHtml = hasQuestion
@@ -1329,10 +1477,6 @@ function openDetail(id) {
     claimSection = `<div class="claim-section"><div class="claim-hint">你是该招领帖发布者，等待失主申请认领后可在消息中心审核</div></div>`;
   }
 
-  // 示例记录提示（owner_id 为空表示示例数据）
-  const demoHint = !record.owner_id
-    ? `<div class="claim-section"><div class="claim-hint">💡 这是一条示例记录，实际发布后才能体验完整认领流程</div></div>`
-    : "";
 
   // 举报按钮
   const reportLink = !isOwn ? `<button class="report-link" id="reportBtn" type="button">举报该信息</button>` : "";
@@ -1355,10 +1499,9 @@ function openDetail(id) {
     reviewSection = `<button class="ghost-button" id="reviewBtn" type="button">评价此次交易</button>`;
   }
 
-  const detailFallback = createSyntheticImage(record.visualSeed || { background: "#e8ecf0", primary: "#6b7280", secondary: "#9ca3af", shape: "card" }, record.title);
   els.detailContent.innerHTML = `
     <div class="detail-content">
-      <img src="${record.imageData || detailFallback}" alt="${escapeHtml(record.title)}" ${fuzzy ? 'style="filter:blur(8px)"' : ""} onerror="this.onerror=null;this.src='${detailFallback}';" />
+      <div class="detail-image-frame">${renderRecordImage(record)}</div>
       <div class="detail-body">
         <div><span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span><h3>${escapeHtml(record.title)}</h3></div>
         <div class="meta-line">
@@ -1369,7 +1512,7 @@ function openDetail(id) {
         ${verifyPrompt}
         <p>${escapeHtml(record.description)}</p>
         ${claimSection}
-        ${demoHint}
+
         <div class="contact-section">
           <strong>联系方式：</strong>
           ${contactDisplay}
@@ -1476,7 +1619,11 @@ function openDetail(id) {
 }
 
 function showContactPrompt() {
-  showToast("请先完成实名认证以查看联系方式", "info");
+  if (currentUser?.verified) {
+    showToast("招领信息需认领审核通过后解锁联系方式", "info");
+    return;
+  }
+  showToast("请先完成模拟实名，再提交认领申请", "info");
   setTimeout(() => {
     els.verifyDialog.showModal();
   }, 500);
@@ -1843,6 +1990,11 @@ function renderFeaturePreview(feature, semantic, statusText = "") {
 async function handlePublish(event) {
   event.preventDefault();
   if (els.publishForm.classList.contains("is-submitting")) return;
+  if (els.aiFieldConfirmation && !els.aiFieldConfirmation.hidden && !els.confirmExtractedFields?.checked) {
+    showToast("请先人工核对结构化字段并勾选确认", "warning");
+    els.aiFieldConfirmation.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
 
   // 如果是编辑模式，走更新逻辑
   if (editingRecordId) {
@@ -1856,11 +2008,7 @@ async function handlePublish(event) {
   try {
     const form = new FormData(els.publishForm);
     const data = Object.fromEntries(form.entries());
-    const fallbackImage = createSyntheticImage({
-      background: "#f3f6f4", primary: rgbToHex(colorMap[data.color] || [90, 110, 120]),
-      secondary: "#ffffff", shape: data.category === "电子设备" ? "earbud" : data.category === "钥匙" ? "key" : data.category === "证件" ? "card" : "cup",
-    }, data.title);
-    let imageData = uploadedImageData || fallbackImage;
+    let imageData = uploadedImageData || "";
     
     // 如果有用户上传的图片且未上传到 Storage，先上传
     if (uploadedImageData && !uploadedImageUrl && uploadedImageData.startsWith("data:")) {
@@ -1882,7 +2030,7 @@ async function handlePublish(event) {
       imageData = uploadedImageUrl;
     }
     
-    const imageFeature = uploadedFeature || (await extractImageFeatures(imageData));
+    const imageFeature = uploadedFeature || (imageData ? await extractImageFeatures(imageData) : null);
     const locationParts = [data.district, data.street, data.detail_location].filter(Boolean);
     const newRecord = {
       id: `record-${Date.now()}`, type: data.type, title: data.title.trim(),
@@ -1897,12 +2045,7 @@ async function handlePublish(event) {
       owner_id: currentUser?.sub || "",
       claim_question: data.claim_question?.trim() || "",
       imageData, imageFeature, semantic: uploadedSemantic || buildFallbackSemantic(data),
-      visualSeed: uploadedImageData ? null : {
-        background: "#f3f6f4",
-        primary: rgbToHex(colorMap[data.color] || [90, 110, 120]),
-        secondary: "#ffffff",
-        shape: data.category === "电子设备" ? "earbud" : data.category === "钥匙" ? "key" : data.category === "证件" ? "card" : "cup",
-      },
+      visualSeed: null,
     };
 
     // 如果选择了代保管点，先寄存
@@ -2172,6 +2315,10 @@ function resetPublishForm() {
   // 重置认领问题输入框的显示状态（form.reset 不会触发 change 事件）
   if (els.claimQuestionGroup) els.claimQuestionGroup.hidden = true;
   els.aiInput.value = "";
+  if (els.fieldConfidencePanel) els.fieldConfidencePanel.hidden = true;
+  if (els.aiFieldConfirmation) els.aiFieldConfirmation.hidden = true;
+  if (els.confirmExtractedFields) els.confirmExtractedFields.checked = false;
+  els.publishForm.querySelectorAll("[data-field-status]").forEach((element) => delete element.dataset.fieldStatus);
   const submitBtn = els.publishForm.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.textContent = "发布";
 }
@@ -2294,17 +2441,62 @@ function getMatchesFor(record) {
 }
 
 function calculateMatch(a, b) {
-  const breakdown = {
-    category: compareCategory(a.category, b.category) * 100,
-    color: compareColorText(a.color, b.color) * 100,
-    location: compareLocation(a.location, b.location) * 100,
-    time: compareTime(a.time, b.time) * 100,
-    text: compareTextSimilarity(`${a.title} ${a.description}`, `${b.title} ${b.description}`) * 100,
-    image: compareImages(a.imageFeature, b.imageFeature) * 100,
-    semantic: compareSemantics(a, b) * 100,
+  const available = {
+    category: hasMeaningfulValue(a.category, ["其他", "未知"]) && hasMeaningfulValue(b.category, ["其他", "未知"]),
+    color: hasMeaningfulValue(a.color, ["未知"]) && hasMeaningfulValue(b.color, ["未知"]),
+    location: hasMeaningfulValue(a.location, ["未知地点"]) && hasMeaningfulValue(b.location, ["未知地点"]),
+    time: hasValidTime(a.time) && hasValidTime(b.time),
+    text: hasMeaningfulValue(`${a.title || ""} ${a.description || ""}`) && hasMeaningfulValue(`${b.title || ""} ${b.description || ""}`),
+    image: Boolean(a.imageFeature && b.imageFeature),
+    semantic: hasSemanticEvidence(a.semantic) && hasSemanticEvidence(b.semantic),
   };
-  const score = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => sum + breakdown[key] * weight, 0);
-  return { score: clamp(score, 0, 100), breakdown, reasons: buildReasons(a, b, breakdown) };
+  const raw = {
+    category: available.category ? compareCategory(a.category, b.category) * 100 : null,
+    color: available.color ? compareColorText(a.color, b.color) * 100 : null,
+    location: available.location ? compareLocation(a.location, b.location) * 100 : null,
+    time: available.time ? compareTime(a.time, b.time) * 100 : null,
+    text: available.text ? compareTextSimilarity(`${a.title || ""} ${a.description || ""}`, `${b.title || ""} ${b.description || ""}`) * 100 : null,
+    image: available.image ? compareImages(a.imageFeature, b.imageFeature) * 100 : null,
+    semantic: available.semantic ? compareSemantics(a, b) * 100 : null,
+  };
+  const activeKeys = Object.keys(WEIGHTS).filter((key) => available[key]);
+  const activeWeight = activeKeys.reduce((sum, key) => sum + WEIGHTS[key], 0);
+  const weightedScore = activeWeight
+    ? activeKeys.reduce((sum, key) => sum + raw[key] * WEIGHTS[key], 0) / activeWeight
+    : 0;
+  const coverage = clamp(activeWeight * 100, 0, 100);
+  // 证据越少，排序分越保守，避免单一字段一致就出现虚高分。
+  const confidenceFactor = 0.72 + (coverage / 100) * 0.28;
+  const score = weightedScore * confidenceFactor;
+  const missingDimensions = Object.keys(WEIGHTS).filter((key) => !available[key]);
+  const effectiveWeights = Object.fromEntries(Object.keys(WEIGHTS).map((key) => [key, available[key] && activeWeight ? WEIGHTS[key] / activeWeight : 0]));
+  return {
+    score: clamp(score, 0, 100),
+    breakdown: raw,
+    reasons: buildReasons(a, b, raw, missingDimensions, coverage),
+    coverage,
+    missingDimensions,
+    effectiveWeights,
+  };
+}
+
+function hasMeaningfulValue(value, blocked = []) {
+  const normalized = String(value || "").trim();
+  return Boolean(normalized && !blocked.includes(normalized));
+}
+
+function hasValidTime(value) {
+  const time = new Date(value).getTime();
+  return Boolean(value && Number.isFinite(time));
+}
+
+function hasSemanticEvidence(semantic) {
+  if (!semantic || typeof semantic !== "object") return false;
+  return Boolean(
+    hasMeaningfulValue(semantic.object_name, ["未知物品"]) ||
+    (Array.isArray(semantic.features) && semantic.features.length) ||
+    (Array.isArray(semantic.visible_text) && semantic.visible_text.length)
+  );
 }
 
 function compareCategory(a, b) {
@@ -2350,12 +2542,19 @@ function compareImages(a, b) {
 }
 
 function compareSemantics(a, b) {
-  const sA = a.semantic || buildFallbackSemantic(a); const sB = b.semantic || buildFallbackSemantic(b);
-  const nameScore = compareTextSimilarity(sA.object_name, sB.object_name);
-  const catScore = compareCategory(sA.category, sB.category);
+  const sA = a.semantic || buildFallbackSemantic(a);
+  const sB = b.semantic || buildFallbackSemantic(b);
+  const featuresA = Array.isArray(sA.features) ? sA.features : [];
+  const featuresB = Array.isArray(sB.features) ? sB.features : [];
+  const textA = Array.isArray(sA.visible_text) ? sA.visible_text : [];
+  const textB = Array.isArray(sB.visible_text) ? sB.visible_text : [];
+  const nameScore = compareTextSimilarity(sA.object_name || "", sB.object_name || "");
+  const catScore = compareCategory(sA.category || "其他", sB.category || "其他");
   const colorScore = compareSemanticColors(sA.colors, sB.colors);
-  const featScore = compareTextSimilarity(`${sA.features.join(" ")} ${sA.visible_text.join(" ")}`, `${sB.features.join(" ")} ${sB.visible_text.join(" ")}`);
-  const brandScore = (sA.brand_guess && sB.brand_guess && sA.brand_guess !== "未知" && sB.brand_guess !== "未知") ? compareTextSimilarity(sA.brand_guess, sB.brand_guess) : 0.35;
+  const featScore = compareTextSimilarity(`${featuresA.join(" ")} ${textA.join(" ")}`, `${featuresB.join(" ")} ${textB.join(" ")}`);
+  const brandScore = (sA.brand_guess && sB.brand_guess && sA.brand_guess !== "未知" && sB.brand_guess !== "未知")
+    ? compareTextSimilarity(sA.brand_guess, sB.brand_guess)
+    : 0.35;
   const conf = (Number(sA.confidence || 0.5) + Number(sB.confidence || 0.5)) / 2;
   return clamp((nameScore * 0.28 + catScore * 0.2 + colorScore * 0.16 + featScore * 0.26 + brandScore * 0.1) * (0.75 + conf * 0.25), 0, 1);
 }
@@ -2366,33 +2565,42 @@ function compareSemanticColors(a, b) {
   return Math.max(...arrA.flatMap((cA) => arrB.map((cB) => compareColorText(cA, cB))));
 }
 
-function buildReasons(a, b, bd) {
-  const reasons = [];
-  if (bd.category >= 85) reasons.push("物品类别一致，是强匹配因素");
-  else if (bd.category >= 40) reasons.push("物品类别存在关联");
-  if (bd.location >= 80) reasons.push("地点高度接近");
-  else if (bd.location >= 55) reasons.push("地点属于相邻区域");
-  if (bd.time >= 80) reasons.push("时间间隔较短");
-  else if (bd.time >= 45) reasons.push("时间间隔可接受");
-  if (bd.image >= 75) reasons.push("图片视觉结构相似");
-  if (bd.semantic >= 78) reasons.push("AI 语义识别高度相似");
-  else if (bd.semantic >= 55) reasons.push("语义标签部分重合");
-  const shared = [...tokenize(`${a.title} ${a.description}`)].filter((t) => tokenize(`${b.title} ${b.description}`).has(t));
-  if (shared.length) reasons.push(`描述关键词重合：${shared.slice(0, 4).join("、")}`);
-  if (bd.color >= 85) reasons.push(`颜色均接近${a.color}`);
-  if (!reasons.length) reasons.push("存在少量字段相似，仍需人工核验");
-  return reasons.slice(0, 5);
+function buildReasons(a, b, bd, missingDimensions = [], coverage = 100) {
+  const positives = [];
+  const caveats = [];
+  if (Number.isFinite(bd.category) && bd.category >= 85) positives.push("物品类别一致，是强匹配因素");
+  else if (Number.isFinite(bd.category) && bd.category >= 40) positives.push("物品类别存在关联");
+  if (Number.isFinite(bd.location) && bd.location >= 80) positives.push("地点高度接近");
+  else if (Number.isFinite(bd.location) && bd.location >= 55) positives.push("地点属于相邻区域");
+  if (Number.isFinite(bd.time) && bd.time >= 80) positives.push("时间间隔较短");
+  else if (Number.isFinite(bd.time) && bd.time >= 45) positives.push("时间间隔可接受");
+  if (Number.isFinite(bd.image) && bd.image >= 75) positives.push("本地图像直方图与感知哈希相似");
+  if (Number.isFinite(bd.semantic) && bd.semantic >= 78) {
+    const sourceLabel = a.semantic?.source === "ai" && b.semantic?.source === "ai" ? "AI 图像语义" : "结构化语义标签";
+    positives.push(`${sourceLabel}高度相似`);
+  } else if (Number.isFinite(bd.semantic) && bd.semantic >= 55) {
+    positives.push("结构化语义标签部分重合");
+  }
+  const tokensB = tokenize(`${b.title || ""} ${b.description || ""}`);
+  const shared = [...tokenize(`${a.title || ""} ${a.description || ""}`)].filter((token) => tokensB.has(token));
+  if (shared.length) positives.push(`描述关键词重合：${shared.slice(0, 4).join("、")}`);
+  if (Number.isFinite(bd.color) && bd.color >= 85) positives.push(`颜色均接近${a.color}`);
+  if (missingDimensions.length) caveats.push(`缺失${missingDimensions.map((key) => DIMENSION_LABELS[key]).join("、")}，对应权重已剔除`);
+  if (coverage < 65) caveats.push("证据覆盖较低，建议补充图片、地点或时间后再人工核验");
+  if (!positives.length) positives.push("仅有少量字段相似，仍需人工核验");
+  return [...positives.slice(0, 3), ...caveats].slice(0, 5);
 }
 
 function buildFallbackSemantic(record) {
-  return { object_name: record.title || "未知物品", category: record.category || "其他", colors: [record.color].filter(Boolean), brand_guess: "未知", visible_text: [], features: [...tokenize(`${record.title || ""} ${record.description || ""}`)].slice(0, 10), confidence: 0.45 };
+  return { object_name: record.title || "未知物品", category: record.category || "其他", colors: [record.color].filter(Boolean), brand_guess: "未知", visible_text: [], features: [...tokenize(`${record.title || ""} ${record.description || ""}`)].slice(0, 10), confidence: 0.45, source: "heuristic" };
 }
 
 async function analyzeImageSemantics(imageData) {
   try {
     const response = await fetch("/api/analyze-image", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ imageData }) });
     if (!response.ok) return null;
-    return (await response.json()).semantic || null;
+    const semantic = (await response.json()).semantic || null;
+    return semantic ? { ...semantic, source: "ai" } : null;
   } catch (e) { return null; }
 }
 
@@ -2433,119 +2641,6 @@ function getPalette(colors) {
   colors.forEach(([r, g, b]) => { const key = `${Math.round(r / 48) * 48},${Math.round(g / 48) * 48},${Math.round(b / 48) * 48}`; buckets.set(key, (buckets.get(key) || 0) + 1); });
   return [...buckets.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([key]) => key.split(",").map((v) => clamp(Number(v), 0, 255)));
 }
-
-function createSyntheticImage(seed, label) {
-  const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = seed.background; ctx.fillRect(0, 0, 640, 480);
-  ctx.fillStyle = "rgba(255,255,255,0.46)"; ctx.fillRect(34, 34, 572, 412);
-  ctx.fillStyle = seed.primary; ctx.strokeStyle = seed.secondary; ctx.lineWidth = 16;
-  if (seed.shape === "card") drawCard(ctx, seed);
-  if (seed.shape === "earbud") drawEarbud(ctx, seed);
-  if (seed.shape === "umbrella") drawUmbrella(ctx, seed);
-  if (seed.shape === "key") drawKey(ctx, seed);
-  if (seed.shape === "cup") drawCup(ctx, seed);
-  if (seed.shape === "bag") drawBag(ctx, seed);
-  if (seed.shape === "jewelry") drawJewelry(ctx, seed);
-  if (seed.shape === "book") drawBook(ctx, seed);
-  if (seed.shape === "tablet") drawTablet(ctx, seed);
-  return canvas.toDataURL("image/png");
-}
-
-function drawCard(ctx, s) { roundRect(ctx, 145, 130, 350, 220, 28); ctx.fill(); ctx.stroke(); ctx.fillStyle = s.secondary; roundRect(ctx, 190, 184, 160, 20, 10); ctx.fill(); roundRect(ctx, 190, 232, 240, 18, 9); ctx.fill(); ctx.fillStyle = "#e9a227"; ctx.beginPath(); ctx.arc(446, 168, 22, 0, Math.PI * 2); ctx.fill(); }
-function drawEarbud(ctx, s) { roundRect(ctx, 190, 185, 260, 150, 54); ctx.fill(); ctx.stroke(); ctx.fillStyle = s.secondary; ctx.beginPath(); ctx.arc(260, 255, 24, 0, Math.PI * 2); ctx.arc(380, 255, 24, 0, Math.PI * 2); ctx.fill(); }
-function drawUmbrella(ctx, s) { ctx.beginPath(); ctx.arc(320, 250, 150, Math.PI, 0); ctx.lineTo(170, 250); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.strokeStyle = s.secondary; ctx.lineWidth = 18; ctx.beginPath(); ctx.moveTo(320, 250); ctx.lineTo(320, 345); ctx.quadraticCurveTo(320, 390, 370, 370); ctx.stroke(); }
-function drawKey(ctx, s) { ctx.beginPath(); ctx.arc(230, 250, 62, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = s.background; ctx.beginPath(); ctx.arc(230, 250, 28, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = s.primary; roundRect(ctx, 280, 232, 210, 36, 18); ctx.fill(); ctx.fillRect(420, 268, 28, 52); ctx.fillRect(462, 268, 28, 36); }
-function drawCup(ctx, s) { roundRect(ctx, 230, 120, 180, 245, 36); ctx.fill(); ctx.stroke(); ctx.strokeStyle = s.secondary; ctx.beginPath(); ctx.arc(416, 230, 52, -Math.PI / 2, Math.PI / 2); ctx.stroke(); }
-function drawBag(ctx, s) {
-  // 包身：圆角矩形
-  roundRect(ctx, 220, 160, 200, 180, 28);
-  ctx.fill();
-  ctx.stroke();
-  // 半圆形提手
-  ctx.strokeStyle = s.secondary;
-  ctx.lineWidth = 12;
-  ctx.beginPath();
-  ctx.arc(320, 160, 50, Math.PI, 0);
-  ctx.stroke();
-  // 两条肩带线条
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.moveTo(240, 170);
-  ctx.lineTo(200, 100);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(400, 170);
-  ctx.lineTo(440, 100);
-  ctx.stroke();
-}
-function drawJewelry(ctx, s) {
-  // 手链主体：圆环
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = s.primary;
-  ctx.beginPath();
-  ctx.arc(320, 240, 90, 0, Math.PI * 2);
-  ctx.stroke();
-  // 圆环上的小圆点装饰
-  ctx.fillStyle = s.secondary;
-  const dots = 6;
-  for (let i = 0; i < dots; i++) {
-    const angle = (Math.PI * 2 * i) / dots;
-    const x = 320 + Math.cos(angle) * 90;
-    const y = 240 + Math.sin(angle) * 90;
-    ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // 吊坠：底部小圆
-  ctx.fillStyle = s.primary;
-  ctx.beginPath();
-  ctx.arc(320, 360, 18, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = s.secondary;
-  ctx.lineWidth = 4;
-  ctx.stroke();
-}
-function drawBook(ctx, s) {
-  // 书本：竖向圆角矩形
-  roundRect(ctx, 250, 110, 140, 260, 16);
-  ctx.fill();
-  ctx.stroke();
-  // 书脊：左侧竖线
-  ctx.strokeStyle = s.secondary;
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.moveTo(278, 110);
-  ctx.lineTo(278, 370);
-  ctx.stroke();
-  // 文字横线
-  ctx.strokeStyle = s.secondary;
-  ctx.lineWidth = 5;
-  for (let i = 0; i < 5; i++) {
-    const y = 160 + i * 36;
-    ctx.beginPath();
-    ctx.moveTo(300, y);
-    ctx.lineTo(370, y);
-    ctx.stroke();
-  }
-}
-function drawTablet(ctx, s) {
-  // 平板主体：大圆角矩形
-  roundRect(ctx, 170, 130, 300, 220, 24);
-  ctx.fill();
-  ctx.stroke();
-  // 屏幕：内框细线
-  ctx.strokeStyle = s.secondary;
-  ctx.lineWidth = 3;
-  roundRect(ctx, 190, 150, 260, 180, 16);
-  ctx.stroke();
-  // Home 键：底部小圆点
-  ctx.fillStyle = s.secondary;
-  ctx.beginPath();
-  ctx.arc(320, 330, 10, 0, Math.PI * 2);
-  ctx.fill();
-}
-function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath(); }
 
 function loadImage(src) { return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = src; }); }
 function readFileAsDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
@@ -2699,7 +2794,10 @@ async function handleClaimRequest(recordId, answer) {
       body: JSON.stringify({ record_id: recordId, answer }),
     });
     const data = await resp.json();
-    if (data.ok) {
+    if (data.ok && data.delivered === false) {
+      showToast(data.message || "离线单账号体验：仅演示提交动作，不会通知真实发布者", "info");
+      els.detailDialog?.close();
+    } else if (data.ok) {
       showToast("认领申请已提交，等待发布者审核", "success");
       els.detailDialog?.close();
     } else {
