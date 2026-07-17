@@ -195,6 +195,7 @@ function cacheElements() {
     "pickupDialog", "pickupForm", "closePickupBtn",
     "aiInput", "aiExtractBtn", "aiExtractHint", "fieldConfidencePanel", "fieldConfidenceList",
     "extractionSourceNotice", "extractionSourceBadge", "aiFieldConfirmation", "confirmExtractedFields",
+    "aiProcessingPanel", "aiProcessingGrid",
     "itemStatusGroup", "custodyPicker", "custodyPointSelect", "claimQuestionGroup",
     "notifyList", "markAllReadBtn", "refreshNotifyBtn", "notifyBadge", "notifyBadgeMobile",
     "profileContent", "toastHost", "floatNotifyHost", "userStatusBar",
@@ -589,7 +590,7 @@ async function handleAiExtract() {
   els.aiExtractBtn.disabled = true;
   els.aiExtractBtn.querySelector(".ai-extract-text").textContent = "正在结构化…";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 35000);
   try {
     const response = await fetch("/api/structured-input", {
       method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -603,8 +604,9 @@ async function handleAiExtract() {
     const structured = payload.structured;
     fillFormFields(structured);
     renderFieldConfidence(structured, payload);
+    renderAiProcessingInfo(payload);
     const isAi = payload.source === "ai";
-    const modelLabel = payload.ai_model ? `，模型：${payload.ai_model.split("/").pop()}` : "";
+    const modelLabel = (payload.model || payload.ai_model) ? `，模型：${(payload.model || payload.ai_model).split("/").pop()}` : "";
     if (!isAi) {
       showToast("当前为离线规则降级；待确认与未识别字段必须人工补充", "warning");
     } else if (structured.requires_confirmation) {
@@ -678,6 +680,49 @@ function renderFieldConfidence(structured, payload) {
     : "未识别可靠时间，请手动填写。";
   els.extractionSourceNotice.textContent = `${isAi ? "模型结果" : "规则结果"}仅用于预填。${timeNote}`;
   els.fieldConfidencePanel.hidden = false;
+}
+
+function renderAiProcessingInfo(payload) {
+  if (!els.aiProcessingPanel || !els.aiProcessingGrid || !isAiEvidenceMode()) return;
+  const reasonLabels = {
+    missing_api_key: "未配置在线模型 Key",
+    provider_timeout: "模型供应商响应超过预算",
+    provider_rate_limited: "模型供应商限流",
+    provider_5xx: "模型供应商服务异常",
+    provider_network_error: "模型供应商网络异常",
+    provider_payload_parse_error: "供应商响应格式异常",
+    empty_model_content: "模型返回内容为空",
+    parse_error: "模型 JSON 解析失败",
+    total_budget_exhausted: "总时间预算耗尽",
+    model_unavailable: "模型不可用",
+  };
+  const attempts = Array.isArray(payload.attempts) ? payload.attempts : [];
+  const source = payload.source === "ai" ? "在线模型" : "启发式规则兜底";
+  const fallbackReason = payload.fallback_reason ? (reasonLabels[payload.fallback_reason] || payload.fallback_reason) : "未发生降级";
+  const attemptText = attempts.length
+    ? attempts.map((attempt) => `${attempt.sequence}. ${String(attempt.model || "unknown").split("/").pop()} · ${attempt.outcome} · ${attempt.latency_ms}ms`).join("；")
+    : "未调用在线模型";
+  const items = [
+    ["请求 ID", payload.request_id || "未返回"],
+    ["本次来源", source],
+    ["实际模型", payload.model || payload.ai_model || "无"],
+    ["总耗时", Number.isFinite(payload.latency_ms) ? `${payload.latency_ms} ms` : "未记录"],
+    ["是否降级", payload.source === "ai" && !payload.fallback_reason ? "否" : "是"],
+    ["降级原因", fallbackReason],
+    ["供应商状态", String(payload.provider_status ?? "未记录")],
+    ["解析状态", payload.parse_status || "未记录"],
+    ["调用尝试", attemptText],
+  ];
+  els.aiProcessingGrid.innerHTML = items.map(([label, value]) => (
+    `<div class="ai-processing-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`
+  )).join("");
+  els.aiProcessingPanel.hidden = false;
+  els.aiProcessingPanel.open = false;
+}
+
+function isAiEvidenceMode() {
+  const params = new URLSearchParams(window.location.search);
+  return ["1", "true"].includes(params.get("interview")) || ["1", "true"].includes(params.get("debug"));
 }
 
 function applyFieldStatusDecorations(statuses) {
@@ -2440,7 +2485,7 @@ function getMatchesFor(record) {
     .sort((a, b) => b.result.score - a.result.score);
 }
 
-function calculateMatch(a, b) {
+function calculateMatch(a, b, weights = WEIGHTS) {
   const available = {
     category: hasMeaningfulValue(a.category, ["其他", "未知"]) && hasMeaningfulValue(b.category, ["其他", "未知"]),
     color: hasMeaningfulValue(a.color, ["未知"]) && hasMeaningfulValue(b.color, ["未知"]),
@@ -2459,17 +2504,17 @@ function calculateMatch(a, b) {
     image: available.image ? compareImages(a.imageFeature, b.imageFeature) * 100 : null,
     semantic: available.semantic ? compareSemantics(a, b) * 100 : null,
   };
-  const activeKeys = Object.keys(WEIGHTS).filter((key) => available[key]);
-  const activeWeight = activeKeys.reduce((sum, key) => sum + WEIGHTS[key], 0);
+  const activeKeys = Object.keys(weights).filter((key) => available[key] && weights[key] > 0);
+  const activeWeight = activeKeys.reduce((sum, key) => sum + weights[key], 0);
   const weightedScore = activeWeight
-    ? activeKeys.reduce((sum, key) => sum + raw[key] * WEIGHTS[key], 0) / activeWeight
+    ? activeKeys.reduce((sum, key) => sum + raw[key] * weights[key], 0) / activeWeight
     : 0;
   const coverage = clamp(activeWeight * 100, 0, 100);
   // 证据越少，排序分越保守，避免单一字段一致就出现虚高分。
   const confidenceFactor = 0.72 + (coverage / 100) * 0.28;
   const score = weightedScore * confidenceFactor;
-  const missingDimensions = Object.keys(WEIGHTS).filter((key) => !available[key]);
-  const effectiveWeights = Object.fromEntries(Object.keys(WEIGHTS).map((key) => [key, available[key] && activeWeight ? WEIGHTS[key] / activeWeight : 0]));
+  const missingDimensions = Object.keys(weights).filter((key) => weights[key] > 0 && !available[key]);
+  const effectiveWeights = Object.fromEntries(Object.keys(weights).map((key) => [key, available[key] && activeWeight ? weights[key] / activeWeight : 0]));
   return {
     score: clamp(score, 0, 100),
     breakdown: raw,

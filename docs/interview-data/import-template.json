@@ -1,0 +1,24 @@
+{
+  "environment": "preview_isolated_only",
+  "records": [
+    {
+      "client_reference": "[INTERVIEW_TEST]-photo-group-01-found",
+      "type": "found",
+      "title": "[INTERVIEW_TEST] 待填写物品标题",
+      "category": "待填写",
+      "color": "待填写",
+      "location_public": "仅填写模糊区域",
+      "detail_location_private": "仅服务端受控字段填写",
+      "time": "待填写 ISO 时间或保留模糊表达",
+      "description": "只描述公开可见特征",
+      "public_photo_files": [
+        "本地脱敏照片路径-1",
+        "本地脱敏照片路径-2"
+      ],
+      "private_claim_feature": "仅填写不公开的验证特征",
+      "contact": "使用隔离测试账号，不填写真实联系方式",
+      "cleanup_by_created_id": true
+    }
+  ]
+}
+

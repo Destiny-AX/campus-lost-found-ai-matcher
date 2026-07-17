@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-07-17T00:00:00+08:00",
+  "scope": "ai_interview_evidence_sprint",
+  "real_provider_calls_in_this_sprint": 0,
+  "real_call_metrics": {
+    "ai_success_count": null,
+    "model_fallback_count": null,
+    "heuristic_fallback_count": null,
+    "timeout_count": null,
+    "p50_latency_ms": null,
+    "p95_latency_ms": null,
+    "status": "not_calculated"
+  },
+  "blocking_reason": "Production structured-input requires an authenticated session. The sprint did not read or copy browser cookies/JWT, did not create a production test user, and no isolated Preview model environment was available. Kimi WebBridge could not connect to the local browser bridge, so the existing browser session could not be used without extracting credentials.",
+  "historical_observation": {
+    "scope": "pre_sprint_small_sample_not_a_stability_metric",
+    "successful_call_latency_ms_approx": 17700,
+    "abort_fallback_latency_ms_approx": 55000,
+    "warning": "The sample is too small and was collected before the new orchestration. It is root-cause evidence only."
+  },
+  "deterministic_contract_tests": {
+    "total": 8,
+    "passed": 8,
+    "scenarios": [
+      "primary model success",
+      "primary timeout then one fallback success",
+      "429 then one fallback success",
+      "non-retryable 4xx then heuristic fallback",
+      "parse failure then one fallback success",
+      "both models timeout then heuristic fallback",
+      "attempt logs exclude key and original text",
+      "debug panel is opt-in and collapsed by default"
+    ],
+    "warning": "Contract tests validate state transitions, not provider uptime or latency."
+  }
+}
+

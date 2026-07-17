@@ -7,7 +7,10 @@
         "dev": "node local-server.js",
         "check": "node scripts/verify-project.js",
         "test:heuristic": "node scripts/heuristic-regression.js",
-        "test:smoke": "node scripts/smoke-test.js"
+        "test:smoke": "node scripts/smoke-test.js",
+        "test:observability": "node scripts/model-observability-test.js",
+        "test:evaluation": "node scripts/evaluate-offline.js",
+        "test:claim-flow": "node scripts/interview-claim-flow-test.js"
     },
     "engines": {
         "node": ">=18"

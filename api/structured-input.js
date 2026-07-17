@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("crypto");
+
 // AI 自然语言结构化提取 API
 // POST /api/structured-input  { text: "..." }
 // → 调用 SiliconFlow 文本模型，把自然语言提取为结构化字段
@@ -18,7 +20,10 @@ const {
 const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
 const FALLBACK_MODEL = process.env.SILICON_FLOW_FALLBACK_MODEL || "Qwen/Qwen3-8B";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
-const MAX_TOKENS = 800;
+const MAX_TOKENS = 600;
+const TOTAL_BUDGET_MS = clampInteger(process.env.SILICON_FLOW_TEXT_TOTAL_BUDGET_MS, 28000, 5000, 45000);
+const PRIMARY_TIMEOUT_MS = clampInteger(process.env.SILICON_FLOW_TEXT_PRIMARY_TIMEOUT_MS, 18000, 3000, 30000);
+const FALLBACK_TIMEOUT_MS = clampInteger(process.env.SILICON_FLOW_TEXT_FALLBACK_TIMEOUT_MS, 9000, 2000, 20000);
 
 // 允许的类别枚举，AI 输出必须落在这些值上
 const CATEGORIES = ["证件", "电子设备", "生活用品", "学习用品", "钥匙", "箱包", "贵重物品", "其他"];
@@ -59,6 +64,8 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
   try {
     const apiKey = getSiliconFlowApiKey();
     const body = await readJsonBody(req);
@@ -70,50 +77,136 @@ module.exports = async function handler(req, res) {
 
     // 没有 API Key 时走本地启发式 fallback，保证 demo 可用
     if (!apiKey) {
-      sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic", ai_error: "API Key 未配置" });
+      sendJson(res, 200, buildFallbackResponse({
+        requestId,
+        startedAt,
+        text,
+        attempts: [],
+        fallbackReason: "missing_api_key",
+        providerStatus: "not_called",
+        parseStatus: "not_attempted",
+      }));
       return;
     }
 
     const prompt = buildPrompt(text);
-
-    // 依次尝试主模型和降级模型，任一成功即返回
-    const models = [TEXT_MODEL, FALLBACK_MODEL];
-    let lastError = "";
-    for (const model of models) {
-      const result = await callSiliconFlow(apiKey, model, prompt);
-      if (result.ok) {
-        try {
-          const structured = normalizeStructured(parsePossiblyFencedJson(result.content), text);
-          sendJson(res, 200, { structured, source: "ai", ai_model: model });
-          return;
-        } catch (parseErr) {
-          // 解析失败，记录错误并尝试下一个模型
-          lastError = `parse_error(${model}): ${safeErrorText(parseErr.message)}`;
-          continue;
-        }
-      }
-      // 记录失败原因，尝试下一个模型
-      lastError = result.error;
-    }
-
-    // 所有模型都失败，降级为启发式提取，并附带错误信息
-    sendJson(res, 200, {
-      structured: heuristicExtract(text),
-      source: "heuristic_fallback",
-      ai_error: lastError,
-    });
+    const result = await runModelCascade({ apiKey, prompt, originalText: text, requestId, startedAt });
+    sendJson(res, 200, result);
   } catch (error) {
     // 顶层异常兜底，避免未处理异常导致进程崩溃
     sendJson(res, 500, { error: "结构化提取失败", detail: safeErrorText(error.message) });
   }
 };
 
-// 调用 SiliconFlow API，返回 { ok, content, error }
-async function callSiliconFlow(apiKey, model, prompt) {
+async function runModelCascade({
+  apiKey,
+  prompt,
+  originalText,
+  requestId = crypto.randomUUID(),
+  startedAt = Date.now(),
+  fetchImpl = fetch,
+  totalBudgetMs = TOTAL_BUDGET_MS,
+  primaryTimeoutMs = PRIMARY_TIMEOUT_MS,
+  fallbackTimeoutMs = FALLBACK_TIMEOUT_MS,
+  models = [TEXT_MODEL, FALLBACK_MODEL],
+}) {
+  const attempts = [];
+  const uniqueModels = [...new Set(models.filter(Boolean))].slice(0, 2);
+  let fallbackReason = "model_unavailable";
+  let providerStatus = "not_called";
+  let parseStatus = "not_attempted";
+
+  for (let index = 0; index < uniqueModels.length; index += 1) {
+    const elapsed = Date.now() - startedAt;
+    const remaining = totalBudgetMs - elapsed;
+    if (remaining < 500) {
+      fallbackReason = "total_budget_exhausted";
+      providerStatus = "budget_exhausted";
+      break;
+    }
+    const configuredTimeout = index === 0 ? primaryTimeoutMs : fallbackTimeoutMs;
+    const timeoutMs = Math.max(500, Math.min(configuredTimeout, remaining));
+    const model = uniqueModels[index];
+    const call = await callSiliconFlow(apiKey, model, prompt, { fetchImpl, timeoutMs });
+    const attempt = {
+      sequence: index + 1,
+      model,
+      latency_ms: call.latencyMs,
+      outcome: call.ok ? "provider_success" : call.reason,
+      provider_status: call.providerStatus,
+      parse_status: "not_attempted",
+    };
+    attempts.push(attempt);
+    providerStatus = call.providerStatus;
+
+    if (call.ok) {
+      try {
+        const parsed = parsePossiblyFencedJson(call.content);
+        validateModelPayload(parsed);
+        const structured = normalizeStructured(parsed, originalText);
+        attempt.outcome = "ai_success";
+        attempt.parse_status = "success";
+        parseStatus = "success";
+        return {
+          structured,
+          request_id: requestId,
+          source: "ai",
+          model,
+          ai_model: model,
+          latency_ms: Date.now() - startedAt,
+          attempts,
+          fallback_reason: index > 0 ? fallbackReason : null,
+          provider_status: providerStatus,
+          parse_status: parseStatus,
+        };
+      } catch (error) {
+        attempt.outcome = "parse_error";
+        attempt.parse_status = "failed";
+        parseStatus = "failed";
+        fallbackReason = "parse_error";
+        if (index === 0 && uniqueModels.length > 1) continue;
+        break;
+      }
+    }
+
+    fallbackReason = call.reason;
+    parseStatus = "not_attempted";
+    if (!call.retryable || index > 0) break;
+  }
+
+  return buildFallbackResponse({
+    requestId,
+    startedAt,
+    text: originalText,
+    attempts,
+    fallbackReason,
+    providerStatus,
+    parseStatus,
+  });
+}
+
+function buildFallbackResponse({ requestId, startedAt, text, attempts, fallbackReason, providerStatus, parseStatus }) {
+  return {
+    structured: heuristicExtract(text),
+    request_id: requestId,
+    source: "heuristic_fallback",
+    model: null,
+    ai_model: null,
+    latency_ms: Date.now() - startedAt,
+    attempts,
+    fallback_reason: fallbackReason,
+    provider_status: providerStatus,
+    parse_status: parseStatus,
+  };
+}
+
+// Calls SiliconFlow without returning provider payloads, secrets, or user text.
+async function callSiliconFlow(apiKey, model, prompt, { fetchImpl = fetch, timeoutMs = 18000 } = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  const startedAt = Date.now();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(SILICON_FLOW_URL, {
+    const response = await fetchImpl(SILICON_FLOW_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -128,28 +221,64 @@ async function callSiliconFlow(apiKey, model, prompt) {
         temperature: 0.1,
         max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
+        ...(model.includes("Qwen3") ? { enable_thinking: false } : {}),
       }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
     const raw = await response.text();
     if (!response.ok) {
-      return { ok: false, content: "", error: `http_${response.status}: ${safeErrorText(raw).slice(0, 200)}` };
+      const retryable = [408, 409, 425, 429].includes(response.status) || response.status >= 500;
+      return {
+        ok: false,
+        content: "",
+        reason: response.status === 429 ? "provider_rate_limited" : response.status >= 500 ? "provider_5xx" : `provider_http_${response.status}`,
+        providerStatus: response.status,
+        retryable,
+        latencyMs: Date.now() - startedAt,
+      };
     }
-    const payload = JSON.parse(raw);
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch (error) {
+      return { ok: false, content: "", reason: "provider_payload_parse_error", providerStatus: response.status, retryable: true, latencyMs: Date.now() - startedAt };
+    }
     const message = payload.choices?.[0]?.message || {};
-    // Qwen3 系列思考模式下 content 可能为空，实际结果在 reasoning_content 中
-    // 此时从 reasoning_content 中提取 JSON 片段作为回退
     let content = message.content || "";
     if (!content && message.reasoning_content) {
       const jsonMatch = message.reasoning_content.match(/\{[\s\S]*\}/);
       if (jsonMatch) content = jsonMatch[0];
     }
-    return { ok: true, content: content || "{}", error: "" };
+    if (!content) {
+      return { ok: false, content: "", reason: "empty_model_content", providerStatus: response.status, retryable: true, latencyMs: Date.now() - startedAt };
+    }
+    return { ok: true, content, reason: "", providerStatus: response.status, retryable: false, latencyMs: Date.now() - startedAt };
   } catch (error) {
     clearTimeout(timeout);
-    return { ok: false, content: "", error: `${error.name || "Unknown"}: ${safeErrorText(error.message)}` };
+    const timedOut = error?.name === "AbortError";
+    return {
+      ok: false,
+      content: "",
+      reason: timedOut ? "provider_timeout" : "provider_network_error",
+      providerStatus: timedOut ? "timeout" : "network_error",
+      retryable: true,
+      latencyMs: Date.now() - startedAt,
+    };
   }
+}
+
+function validateModelPayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("model payload must be an object");
+  const hasCoreEvidence = [value.title, value.item_name, value.type, value.category, value.location]
+    .some((item) => String(item || "").trim());
+  if (!hasCoreEvidence) throw new Error("model payload has no core evidence");
+}
+
+function clampInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 function buildPrompt(text) {
@@ -616,3 +745,7 @@ module.exports.heuristicExtract = heuristicExtract;
 module.exports.parseTimeEvidence = parseTimeEvidence;
 module.exports.extractReliableContact = extractReliableContact;
 module.exports.extractLocationEvidence = extractLocationEvidence;
+module.exports.runModelCascade = runModelCascade;
+module.exports.callSiliconFlow = callSiliconFlow;
+module.exports.validateModelPayload = validateModelPayload;
+module.exports.buildPrompt = buildPrompt;
