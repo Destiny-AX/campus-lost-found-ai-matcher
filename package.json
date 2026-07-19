@@ -10,7 +10,8 @@
         "test:smoke": "node scripts/smoke-test.js",
         "test:observability": "node scripts/model-observability-test.js",
         "test:evaluation": "node scripts/evaluate-offline.js",
-        "test:claim-flow": "node scripts/interview-claim-flow-test.js"
+        "test:claim-flow": "node scripts/interview-claim-flow-test.js",
+        "test:auth": "node scripts/supabase-auth-contract-test.js"
     },
     "engines": {
         "node": ">=18"

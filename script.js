@@ -158,7 +158,6 @@ async function prepareVerificationView() {
   const mode = new URLSearchParams(window.location.search).get("verify_view");
   if (!mode) return;
   document.body.dataset.verifyView = mode;
-  if (!currentUser) await autoLoginDemo();
   if (mode === "home") { switchView("home"); return; }
   if (mode === "publish" || mode === "degraded") {
     switchView("publish");
@@ -190,7 +189,7 @@ function cacheElements() {
     "matchResults", "publishForm", "imageInput", "dropZone", "imagePreview",
     "featurePreview", "metricGrid", "detailDialog", "detailContent",
     "closeDialog", "topAuthBtn", "topVerifyBtn", "mobileAuthBtn", "mobileVerifyBtn",
-    "loginDialog", "loginForm", "loginGuestBtn", "closeLoginBtn",
+    "loginDialog", "loginForm", "registerAccountBtn", "closeLoginBtn", "loginError",
     "verifyDialog", "verifyForm", "closeVerifyBtn", "verifyError",
     "pickupDialog", "pickupForm", "closePickupBtn",
     "aiInput", "aiExtractBtn", "aiExtractHint", "fieldConfidencePanel", "fieldConfidenceList",
@@ -295,8 +294,8 @@ function bindEvents() {
 
   // 登录按钮事件在 updateAuthUI 中动态绑定
   on(els.closeLoginBtn, "click", () => els.loginDialog?.close());
-  on(els.loginForm, "submit", handleWechatLogin);
-  on(els.loginGuestBtn, "click", handleGuestLogin);
+  on(els.loginForm, "submit", handlePasswordLogin);
+  on(els.registerAccountBtn, "click", handlePasswordRegister);
 
   // 实名认证
   on(els.topVerifyBtn, "click", () => { if (els.verifyError) els.verifyError.textContent = ""; els.verifyDialog?.showModal(); });
@@ -400,8 +399,8 @@ function switchView(view) {
 function restoreAuth() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
-    // 无登录态时自动静默登录演示账号
-    autoLoginDemo();
+    currentUser = null;
+    updateAuthUI();
     return;
   }
   try {
@@ -410,7 +409,8 @@ function restoreAuth() {
     // 避免无效 token 残留导致 currentUser 被设为空对象，按钮显示但请求 401
     if (!payload.sub || (payload.exp && Date.now() / 1000 > payload.exp)) {
       localStorage.removeItem(AUTH_TOKEN_KEY);
-      autoLoginDemo();
+      currentUser = null;
+      updateAuthUI();
       return;
     }
     // 页面刷新恢复登录时，JWT的exp是过期时间戳，不能作为经验值使用
@@ -420,27 +420,11 @@ function restoreAuth() {
     notifyLastPoll = new Date(0).toISOString();
     startNotifyPoll();
     updateAuthUI();
-  } catch (e) { localStorage.removeItem(AUTH_TOKEN_KEY); autoLoginDemo(); }
-}
-
-// 自动登录演示账号（单用户模式）
-async function autoLoginDemo() {
-  try {
-    const response = await fetch("/api/auth?action=guest-login", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nickname: "拾小寻" }),
-    });
-    const payload = await response.json();
-    if (!response.ok) { updateAuthUI(); return; }
-    localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    const jwtPayload = decodeJwtPayload(payload.token);
-    currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
-    // 自动登录后重置通知轮询起点，避免使用上一会话的时间戳
-    notifyLastPoll = new Date(0).toISOString();
-    startNotifyPoll();
+  } catch (e) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    currentUser = null;
     updateAuthUI();
-    renderAll();
-  } catch (e) { updateAuthUI(); }
+  }
 }
 
 function updateAuthUI() {
@@ -454,12 +438,22 @@ function updateAuthUI() {
   } else {
     els.topAuthBtn.textContent = "登录";
     els.topAuthBtn.classList.remove("is-logged-in");
-    els.topAuthBtn.onclick = () => autoLoginDemo();
+    els.topAuthBtn.onclick = openLoginDialog;
     els.mobileAuthBtn.textContent = "登录";
-    els.mobileAuthBtn.onclick = () => autoLoginDemo();
+    els.mobileAuthBtn.onclick = openLoginDialog;
   }
   els.topVerifyBtn.hidden = !(loggedIn && !currentUser.verified);
   if (els.mobileVerifyBtn) els.mobileVerifyBtn.hidden = !(loggedIn && !currentUser.verified);
+}
+
+function openLoginDialog() {
+  if (els.loginError) {
+    els.loginError.textContent = "";
+    els.loginError.dataset.state = "";
+  }
+  const passwordInput = els.loginForm?.querySelector('[name="password"]');
+  if (passwordInput) passwordInput.value = "";
+  els.loginDialog?.showModal();
 }
 
 function openUserDialog() {
@@ -476,7 +470,7 @@ function openUserDialog() {
   if (verifyBtn) verifyBtn.style.display = currentUser.verified ? "none" : "block";
   if (info) {
     info.innerHTML = `
-      <p style="font-size:13px;color:var(--text2);margin:4px 0;">登录方式：${currentUser.provider === "wechat_mock" ? "微信" : "游客"}</p>
+      <p style="font-size:13px;color:var(--text2);margin:4px 0;">登录方式：${currentUser.provider === "password" ? "邮箱密码" : "离线测试"}</p>
       <p style="font-size:13px;color:var(--text2);margin:4px 0;">信用积分：${currentUser.verified ? 10 : 5}</p>
     `;
   }
@@ -490,45 +484,80 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function handleWechatLogin(event) {
-  event.preventDefault();
-  const form = new FormData(els.loginForm);
-  const data = Object.fromEntries(form.entries());
-  try {
-    const response = await fetch("/api/auth?action=wechat-login", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const payload = await response.json();
-    if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
-    localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    // 合并 JWT payload 和 user 对象数据，显式排除 JWT 标准字段避免覆盖用户数据
-    const jwtPayload = decodeJwtPayload(payload.token);
-    currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
-    addAccount(payload.token, payload.user);
-    updateAuthUI();
-    els.loginDialog.close();
-    showToast(`欢迎，${currentUser.nickname}！`, "success");
-    setTimeout(() => window.location.reload(), 300);
-  } catch (e) { showToast("网络错误", "error"); }
+function setLoginBusy(busy, action) {
+  const loginButton = els.loginForm?.querySelector('button[type="submit"]');
+  if (loginButton) {
+    loginButton.disabled = busy;
+    loginButton.textContent = busy && action === "login" ? "登录中..." : "登录";
+  }
+  if (els.registerAccountBtn) {
+    els.registerAccountBtn.disabled = busy;
+    els.registerAccountBtn.textContent = busy && action === "register" ? "注册中..." : "注册账号";
+  }
 }
 
-async function handleGuestLogin() {
+function completePasswordLogin(payload, message) {
+  localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
+  const jwtPayload = decodeJwtPayload(payload.token);
+  currentUser = { ...jwtPayload, ...payload.user, exp: payload.user?.exp ?? 0 };
+  addAccount(payload.token, payload.user);
+  notifyLastPoll = new Date(0).toISOString();
+  startNotifyPoll();
+  updateAuthUI();
+  els.loginDialog?.close();
+  showToast(message || `欢迎，${currentUser.nickname}！`, "success");
+  setTimeout(() => window.location.reload(), 300);
+}
+
+async function submitPasswordAuth(action) {
+  const form = new FormData(els.loginForm);
+  const data = Object.fromEntries(form.entries());
+  if (action === "register" && String(data.nickname || "").trim().length < 2) {
+    if (els.loginError) els.loginError.textContent = "注册时请填写 2—30 个字符的昵称";
+    return;
+  }
+  if (els.loginError) {
+    els.loginError.textContent = "";
+    els.loginError.dataset.state = "";
+  }
+  setLoginBusy(true, action);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch("/api/auth?action=guest-login", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+    const response = await fetch(`/api/auth?action=password-${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+      signal: controller.signal,
     });
-    const payload = await response.json();
-    if (!response.ok) { showToast(payload.error || "登录失败", "error"); return; }
-    localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
-    const jwtPayload2 = decodeJwtPayload(payload.token);
-    currentUser = { ...jwtPayload2, ...payload.user, exp: payload.user?.exp ?? 0 };
-    addAccount(payload.token, payload.user);
-    updateAuthUI();
-    els.loginDialog.close();
-    showToast(`游客 ${currentUser.nickname}，欢迎体验！`, "success");
-    setTimeout(() => window.location.reload(), 300);
-  } catch (e) { showToast("网络错误", "error"); }
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 202 && payload.confirmation_required) {
+      if (els.loginError) {
+        els.loginError.dataset.state = "success";
+        els.loginError.textContent = payload.message || "注册成功，请完成邮箱验证后登录";
+      }
+      return;
+    }
+    if (!response.ok || !payload.token) {
+      if (els.loginError) els.loginError.textContent = payload.error || `${action === "login" ? "登录" : "注册"}失败`;
+      return;
+    }
+    completePasswordLogin(payload, action === "register" ? "账号注册成功，已登录" : "登录成功");
+  } catch (error) {
+    if (els.loginError) els.loginError.textContent = error.name === "AbortError" ? "请求超时，请稍后重试" : "网络错误，请稍后重试";
+  } finally {
+    clearTimeout(timeout);
+    setLoginBusy(false, action);
+  }
+}
+
+async function handlePasswordLogin(event) {
+  event.preventDefault();
+  await submitPasswordAuth("login");
+}
+
+async function handlePasswordRegister() {
+  await submitPasswordAuth("register");
 }
 
 async function handleVerifyIdentity(event) {
@@ -1767,6 +1796,11 @@ function startNotifyPoll() {
   notifyTimer = setInterval(pollNotifications, NOTIFY_POLL_INTERVAL);
 }
 
+function stopNotifyPoll() {
+  if (notifyTimer) clearInterval(notifyTimer);
+  notifyTimer = null;
+}
+
 // 轮询锁，防止 setInterval 导致的并发轮询竞态
 let notifyPolling = false;
 async function pollNotifications() {
@@ -1838,7 +1872,7 @@ async function handleMarkAllRead() {
 // ============== 个人主页 ==============
 function renderProfile() {
   if (!currentUser) {
-    els.profileContent.innerHTML = `<div class="empty-state">请先登录查看个人信息。<button class="primary-action" onclick="document.querySelector('#loginDialog').showModal()">微信登录</button></div>`;
+    els.profileContent.innerHTML = `<div class="empty-state">请先登录查看个人信息。<button class="primary-action" onclick="openLoginDialog()">邮箱登录</button></div>`;
     return;
   }
   const verified = currentUser.verified;
@@ -1868,7 +1902,7 @@ function renderProfile() {
       <div class="profile-info">
         <h3>${escapeHtml(currentUser.nickname || "无名氏")}</h3>
         <p>${verified ? "✅ 已实名认证" : "⚠️ 未实名认证"}</p>
-        <p>登录方式：${currentUser.provider === "wechat_mock" ? "微信" : "游客"}</p>
+        <p>登录方式：${currentUser.provider === "password" ? "邮箱密码" : "离线测试"}</p>
       </div>
     </div>
     <div class="user-status-bar" style="margin:16px 0;">
@@ -1902,6 +1936,9 @@ function renderProfile() {
 }
 
 function handleLogout() {
+  const currentId = currentUser?.sub;
+  if (currentId) saveAccounts(getAccounts().filter((account) => account.id !== currentId));
+  stopNotifyPoll();
   localStorage.removeItem(AUTH_TOKEN_KEY);
   currentUser = null;
   updateAuthUI();
@@ -1916,8 +1953,10 @@ function getAccounts() {
 function saveAccounts(list) { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list)); }
 
 function addAccount(token, user) {
-  const list = getAccounts().filter(a => a.id !== user.sub);
-  list.unshift({ id: user.sub, nickname: user.nickname, token, avatar: user.avatar_url || "" });
+  const id = user?.sub || user?.id;
+  if (!id) return;
+  const list = getAccounts().filter(a => a.id !== id);
+  list.unshift({ id, nickname: user.nickname, token, avatar: user.avatar_url || "" });
   saveAccounts(list);
 }
 
@@ -1977,7 +2016,7 @@ function renderAccountList() {
   if (addBtn) {
     addBtn.onclick = () => {
       document.querySelector("#userDialog")?.close();
-      els.loginDialog?.showModal();
+      openLoginDialog();
     };
   }
 }

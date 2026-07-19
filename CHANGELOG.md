@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-07-19｜Supabase Auth 基础账密版（本地分支）
+
+- 将用户入口从微信/游客演示改为拾寻自有邮箱注册、密码登录和退出。
+- 密码注册与校验接入 Supabase Auth；业务表不保存密码、哈希或 Supabase 会话令牌。
+- 使用 Supabase Auth UUID 作为 `shiyun_users`、发布记录、认领与通知的稳定用户 ID，兼容既有 text 字段。
+- Supabase 配置存在时关闭游客登录；无配置的游客路由仅供离线 Smoke Test 使用。
+- 增加邮箱、密码、昵称校验、15 秒超时、限流与安全错误映射。
+- 增加 7 项完全离线的 Supabase Auth 契约测试，不连接真实数据库。
+- 保留现有应用 JWT 以避免重写全部接口；已记录不能即时撤销的生产化风险。
+- 本轮未连接生产 Supabase、未合并 main、未部署 Production、未更新 `shixun.xyz`。
+
 ## 2026-07-15｜合并前本地整合与 QA
 
 - 在本地分支 codex/merge-portfolio-fixes-20260715 整合求职优化版；原始 HEAD 由 codex/pre-merge-backup-20260715 和桌面快照双重保留。

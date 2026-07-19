@@ -385,9 +385,6 @@ body {
 .primary-action:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
 .primary-action.is-logged-in { background: var(--green); }
 
-.wechat-action { background: var(--wechat); }
-.wechat-action:hover { background: #06a850; transform: translateY(-1px); }
-
 .danger-button {
   padding: 6px 14px; border-radius: var(--radius-xs); border: 1px solid var(--red);
   background: transparent; font-size: 12px; color: var(--red); cursor: pointer;
@@ -903,8 +900,8 @@ body {
 /* ============== Login / Verify Dialog ============== */
 .login-card { padding: 28px; }
 .login-header { text-align: center; margin-bottom: 20px; }
-.wechat-icon {
-  width: 48px; height: 48px; border-radius: 12px; background: var(--wechat); color: #fff;
+.account-icon {
+  width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, var(--blue), var(--purple)); color: #fff;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 22px; font-weight: 700; margin-bottom: 8px;
 }
@@ -932,6 +929,7 @@ body {
   margin: 8px 0; padding: 0;
 }
 .form-error:empty { margin: 0; min-height: 0; }
+.form-error[data-state="success"] { color: var(--green); }
 
 /* ============== Notifications — 更精致的入场动效 ============== */
 .toast-host {
