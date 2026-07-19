@@ -1,0 +1,57 @@
+﻿{
+    "generated_at":  "2026-07-13T06:52:17.6670187Z",
+    "screenshot_count":  7,
+    "all_unchanged":  true,
+    "assets":  [
+                   {
+                       "file":  "docs/screenshots/01-首页失物广场_demo-memory.png",
+                       "bytes":  234478,
+                       "sha256":  "AFC81ECEB97E4C0EE5933521BB0F6D30CD82C2D617B062C339CF856EE403BE41",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/02-AI智能发布_字段置信状态.png",
+                       "bytes":  189438,
+                       "sha256":  "035D19C716729E07B5F1DA94A599BED23FD8E6824D47EA0D2A7AE52A87557CC1",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/03-图片理解_本地特征兜底.png",
+                       "bytes":  179355,
+                       "sha256":  "78815DDA058E8865F352F8343BC856C315AD4E552CD51810126BE3CAF74A508A",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/04-七维匹配_证据覆盖.png",
+                       "bytes":  203862,
+                       "sha256":  "5E718217D4A2556AA459399828D9AF3BF334194944CF1E23B53C8D60D4ACAA18",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/05-隐私认领_游客脱敏.png",
+                       "bytes":  264715,
+                       "sha256":  "D8D0503108777775ED0BCE52C7C60BA3C07F9FC76C8AF6AD5CC9C6C5608618EB",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/06-Evaluation_业务漏斗.png",
+                       "bytes":  168344,
+                       "sha256":  "232E4605992562429CF114995D0F0E14817F24D80E329CB860A0535E7D4533B8",
+                       "source_hash_unchanged":  true
+                   },
+                   {
+                       "file":  "docs/screenshots/07-异常降级_无Key启发式.png",
+                       "bytes":  189406,
+                       "sha256":  "EE34D95B0EC5167673CF8CBA725155E5F972D3C7CD4BCC4BAFE010BA83859559",
+                       "source_hash_unchanged":  true
+                   }
+               ],
+    "online_integration_files_unchanged":  true,
+    "checked_files":  [
+                          "api/analyze-image.js",
+                          "api/_shared.js",
+                          "api/records.js",
+                          "api/upload-image.js",
+                          "api/auth.js"
+                      ]
+}
