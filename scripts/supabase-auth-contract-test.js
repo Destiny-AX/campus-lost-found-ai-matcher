@@ -40,6 +40,7 @@ global.fetch = async (url, options = {}) => {
       user_metadata: body.data || {},
     };
     providerUsers.set(body.email, user);
+    if (body.email === "opaque@example.com") return jsonResponse({});
     if (body.email === "confirm@example.com") return jsonResponse({ user, session: null });
     return jsonResponse({ user, session: { access_token: "provider-session-must-not-leak" } });
   }
@@ -143,6 +144,16 @@ async function main() {
   assert.ok(!confirmation.body.token);
   pass("启用邮箱确认时不提前签发应用登录令牌");
 
+  const ambiguousRegister = await invoke("password-register", {
+    email: "opaque@example.com",
+    password: "opaque-safe-42",
+    nickname: "模糊响应账号",
+  }, "auth-test-ambiguous-register");
+  assert.equal(ambiguousRegister.status, 200);
+  assert.equal(ambiguousRegister.body.registration_state, "account_available");
+  assert.ok(ambiguousRegister.body.token);
+  pass("注册返回模糊 200 时用原账密确认账号并正常登录");
+
   const invalid = await invoke("password-register", {
     email: "not-an-email",
     password: "short",
@@ -180,6 +191,7 @@ async function main() {
   assert.ok(html.includes("拾寻账号") && !html.includes("微信登录（Mock）") && !html.includes("游客登录"));
   assert.ok(html.includes("身份信息登记") && !html.includes('data-view-target="stats"') && !html.includes('id="view-stats"'));
   assert.ok(!html.includes("分数是演示排序分"));
+  assert.ok(html.includes("物品名称、类别、颜色、地点、时间、特征和联系方式"));
   assert.ok(fs.existsSync(path.join(root, "docs", "evaluation", "evaluation-report.md")));
   pass("用户界面提供拾寻邮箱密码入口且移除微信/游客演示入口");
 
@@ -189,7 +201,7 @@ async function main() {
   assert.ok(!browserScript.includes("🔥 高排序候选"));
   pass("浏览器不再自动创建演示身份并调用新的账密接口");
 
-  console.log("Supabase Auth 契约测试通过：12/12");
+  console.log("Supabase Auth 契约测试通过：13/13");
 }
 
 main().catch((error) => {

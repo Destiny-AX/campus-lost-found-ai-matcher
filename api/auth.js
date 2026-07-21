@@ -173,7 +173,7 @@ async function ensurePasswordProfile(providerUser, nickname) {
   });
 }
 
-function sendPasswordSession(res, providerPayload, profile) {
+function sendPasswordSession(res, providerPayload, profile, metadata = {}) {
   const providerUser = providerPayload.user;
   const user = {
     ...profile,
@@ -189,7 +189,7 @@ function sendPasswordSession(res, providerPayload, profile) {
     verified: Boolean(user.is_verified),
     role: user.role || "user",
   });
-  sendJson(res, 200, { token, user });
+  sendJson(res, 200, { token, user, ...metadata });
 }
 
 async function handlePasswordRegister(req, res) {
@@ -204,10 +204,26 @@ async function handlePasswordRegister(req, res) {
       password: input.password,
       data: { nickname: input.nickname },
     });
-    if (!result.ok || !result.payload?.user?.id) {
+    if (!result.ok) {
       console.warn("[auth] provider_failed action=register status=" + result.status + " key_source=" + config.keySource);
       return sendJson(res, result.status >= 400 && result.status < 500 ? result.status : 502, {
         error: mapProviderError(result, "register"),
+      });
+    }
+    if (!result.payload?.user?.id) {
+      // Supabase may return an intentionally ambiguous 200 response for an existing address.
+      // Confirm with the submitted password instead of reporting a false service outage.
+      const loginResult = await callSupabaseAuth(config, "/auth/v1/token?grant_type=password", {
+        email: input.email,
+        password: input.password,
+      });
+      if (loginResult.ok && loginResult.payload?.user?.id && loginResult.payload?.access_token) {
+        const profile = await ensurePasswordProfile(loginResult.payload.user, input.nickname);
+        return sendPasswordSession(res, loginResult.payload, profile, { registration_state: "account_available" });
+      }
+      console.warn("[auth] ambiguous_register_followup status=" + loginResult.status + " key_source=" + config.keySource);
+      return sendJson(res, loginResult.status >= 400 && loginResult.status < 500 ? loginResult.status : 502, {
+        error: mapProviderError(loginResult, "login"),
       });
     }
     if (!(result.payload.access_token || result.payload.session?.access_token)) {

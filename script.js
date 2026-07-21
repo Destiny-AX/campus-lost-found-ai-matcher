@@ -543,7 +543,7 @@ async function submitPasswordAuth(action) {
       if (els.loginError) els.loginError.textContent = payload.error || `${action === "login" ? "登录" : "注册"}失败`;
       return;
     }
-    completePasswordLogin(payload, action === "register" ? "账号注册成功，已登录" : "登录成功");
+    completePasswordLogin(payload, action === "register" ? (payload.registration_state === "account_available" ? "账号已可用，已登录" : "账号注册成功，已登录") : "登录成功");
   } catch (error) {
     if (els.loginError) els.loginError.textContent = error.name === "AbortError" ? "请求超时，请稍后重试" : "网络错误，请稍后重试";
   } finally {
