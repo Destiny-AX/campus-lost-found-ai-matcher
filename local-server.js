@@ -34,12 +34,17 @@ const mimeTypes = {
   ".webmanifest": "application/manifest+json",
 };
 
-const server = http.createServer(async (req, res) => {
+function createServer() {
+  return http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const handler = apiRoutes[url.pathname];
     if (handler) {
       await handler(req, res);
+      return;
+    }
+    if (url.pathname.startsWith("/api/")) {
+      sendJson(res, 404, { error: "API route not found" });
       return;
     }
     if (req.method !== "GET" && req.method !== "HEAD") {
@@ -52,13 +57,33 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 500, { error: "Internal server error" });
   }
 });
+}
 
-server.listen(PORT, () => {
-  console.log(`拾寻 v2 已启动: http://localhost:${PORT}`);
-});
+function startServer(port = PORT) {
+  const server = createServer();
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, () => {
+      const actualPort = server.address().port;
+      console.log(`拾寻 AI 产品求职优化版已启动：http://localhost:${actualPort}`);
+      resolve(server);
+    });
+  });
+}
+
+if (require.main === module) {
+  startServer().catch((error) => { console.error(error); process.exitCode = 1; });
+}
 
 function serveStatic(pathname, res, headOnly) {
-  const normalized = pathname === "/" ? "/index.html" : pathname;
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(pathname);
+  } catch (error) {
+    sendJson(res, 400, { error: "Invalid URL encoding" });
+    return;
+  }
+  const normalized = decodedPathname === "/" ? "/index.html" : decodedPathname;
   const filePath = path.normalize(path.join(ROOT, normalized));
   // 统一大小写并确保路径分隔符一致，防止 Windows 路径遍历绕过
   const rootResolved = path.resolve(ROOT).toLowerCase().replace(/\\/g, "/");
@@ -70,7 +95,7 @@ function serveStatic(pathname, res, headOnly) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
       // SPA fallback：对未知 GET 路径返回 index.html
-      if (!pathname.includes(".")) {
+      if (!decodedPathname.includes(".")) {
         fs.readFile(path.join(ROOT, "index.html"), (e2, html) => {
           if (e2) return sendJson(res, 404, { error: "Not found" });
           res.writeHead(200, { "Content-Type": mimeTypes[".html"] });
@@ -91,3 +116,5 @@ function sendJson(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
 }
+
+module.exports = { createServer, startServer };

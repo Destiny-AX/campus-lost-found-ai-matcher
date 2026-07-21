@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0071e3" />
-    <title>拾寻 · 城市拾遗网络</title>
-    <link rel="stylesheet" href="style.css?v=34" />
+    <title>拾寻 · AI 智能失物协寻平台</title>
+    <link rel="stylesheet" href="style.css?v=35" />
   </head>
   <body>
     <!-- 顶部 Toast 通知容器 -->
@@ -17,7 +17,7 @@
         <div class="brand-mark" aria-hidden="true"><img src="/images/logo.png" alt="拾寻" /></div>
         <div>
           <h1>拾寻</h1>
-          <p>城市拾遗网络</p>
+          <p>AI 智能失物协寻平台</p>
         </div>
       </div>
       <nav class="nav-list">
@@ -37,9 +37,6 @@
         <button class="nav-item" data-view-target="profile" type="button">
           <span class="nav-icon" aria-hidden="true">◉</span><span>我的</span>
         </button>
-        <button class="nav-item" data-view-target="stats" type="button">
-          <span class="nav-icon" aria-hidden="true">▦</span><span>数据概览</span>
-        </button>
       </nav>
     </aside>
 
@@ -50,22 +47,23 @@
         <div class="info-banner" id="infoBanner">
           <div class="info-banner-content">
             <span class="info-banner-icon">💡</span>
-            <span class="info-banner-text">新用户？使用说明：发布失物/招领信息 → AI自动匹配 → 实名认证后查看联系方式 → 联系对方取回物品</span>
+            <span class="info-banner-text">新用户？使用说明：发布失物/招领信息 → AI自动匹配 → 完成身份信息登记后查看联系方式 → 联系对方取回物品</span>
           </div>
           <button class="info-banner-close" id="closeInfoBanner" type="button" aria-label="关闭">×</button>
         </div>
 
+
         <header class="top-bar">
           <div class="top-bar-actions">
-            <button class="ghost-button" id="topVerifyBtn" type="button" hidden>实名认证</button>
-            <button class="primary-action" id="topAuthBtn" type="button">微信登录</button>
+            <button class="ghost-button" id="topVerifyBtn" type="button" hidden>身份信息登记</button>
+            <button class="primary-action" id="topAuthBtn" type="button">登录 / 注册</button>
           </div>
         </header>
 
         <section class="mobile-title" aria-label="移动端标题">
           <div class="mobile-brand-mark" aria-hidden="true"><img src="/images/logo.png" alt="拾寻" /></div>
           <div class="mobile-title-actions">
-            <button class="ghost-button mobile-verify-btn" id="mobileVerifyBtn" type="button" hidden>实名认证</button>
+            <button class="ghost-button mobile-verify-btn" id="mobileVerifyBtn" type="button" hidden>身份信息登记</button>
             <button class="ghost-button mobile-auth-btn" id="mobileAuthBtn" type="button">登录</button>
           </div>
         </section>
@@ -90,7 +88,7 @@
             <div class="stat-item">
               <span class="stat-icon" aria-hidden="true">🎯</span>
               <div class="stat-info">
-                <span class="stat-number" id="statTotalRecovered">0</span>
+                <span class="stat-number" id="statTotalRecovered">—</span>
                 <span class="stat-label">物品已找回</span>
               </div>
             </div>
@@ -98,7 +96,7 @@
             <div class="stat-item">
               <span class="stat-icon" aria-hidden="true">🤝</span>
               <div class="stat-info">
-                <span class="stat-number" id="statHelpedOthers">0</span>
+                <span class="stat-number" id="statHelpedOthers">—</span>
                 <span class="stat-label">帮他人找回</span>
               </div>
             </div>
@@ -106,7 +104,7 @@
             <div class="stat-item">
               <span class="stat-icon" aria-hidden="true">📦</span>
               <div class="stat-info">
-                <span class="stat-number" id="statActiveItems">0</span>
+                <span class="stat-number" id="statActiveItems">—</span>
                 <span class="stat-label">进行中</span>
               </div>
             </div>
@@ -114,7 +112,7 @@
             <div class="stat-item">
               <span class="stat-icon" aria-hidden="true">⭐</span>
               <div class="stat-info">
-                <span class="stat-number" id="statMyCredit">0</span>
+                <span class="stat-number" id="statMyCredit">—</span>
                 <span class="stat-label">我的信用</span>
               </div>
             </div>
@@ -154,7 +152,9 @@
             </div>
             <div class="active-filters" id="activeFilters"></div>
           </div>
-          <div class="card-grid" id="itemList"></div>
+          <div class="card-grid" id="itemList">
+            <div class="loading-state"><span class="loading-spinner" aria-hidden="true"></span><strong>正在加载示例记录…</strong><p>超过 10 秒将显示错误与重试入口。</p></div>
+          </div>
         </section>
 
         <!-- ============== 视图：智能发布 ============== -->
@@ -175,15 +175,30 @@
             <textarea
               id="aiInput"
               rows="3"
-              placeholder="例如：昨天下午3点左右在南京东路地铁站丢了一个黑色双肩包，里面有笔记本电脑和一串钥匙"
+              placeholder="例如：昨天下午3点，我在北京市朝阳区定福庄东街中国传媒大学图书馆二层丢了一副黑色索尼耳机，耳机盒右侧有一道划痕，联系方式：微信 lostsony88"
             ></textarea>
             <div class="ai-input-actions">
               <button class="primary-action" id="aiExtractBtn" type="button">
                 <span class="ai-extract-text">让 AI 自动填表</span>
               </button>
-              <span class="ai-input-hint" id="aiExtractHint">支持自然语言，AI 会自动识别类型、地点、时间和类别</span>
+              <span class="ai-input-hint" id="aiExtractHint">建议包含：丢失/捡到、物品名称、类别、颜色、地点、时间、特征和联系方式</span>
             </div>
           </div>
+
+          <section class="field-confidence-panel" id="fieldConfidencePanel" hidden aria-live="polite">
+            <div class="field-confidence-head">
+              <div><strong>结构化结果与字段置信状态</strong><p id="extractionSourceNotice">结果仅用于预填，发布前请人工确认。</p></div>
+              <span class="source-badge" id="extractionSourceBadge">待运行</span>
+            </div>
+            <div class="field-confidence-list" id="fieldConfidenceList"></div>
+            <details class="ai-processing-panel" id="aiProcessingPanel" hidden>
+              <summary>AI 处理信息（面试证据模式）</summary>
+              <div class="ai-processing-grid" id="aiProcessingGrid"></div>
+              <p class="ai-processing-note">
+                仅展示模型来源、耗时与降级状态；不记录 API Key，也不展示不必要的用户原文。
+              </p>
+            </details>
+          </section>
 
           <form class="publish-form" id="publishForm">
             <div class="form-row segmented" role="group" aria-label="发布类型">
@@ -228,6 +243,7 @@
               <label>
                 物品类别
                 <select name="category" required>
+                  <option value="">请选择类别</option>
                   <option value="证件">证件</option>
                   <option value="电子设备">电子设备</option>
                   <option value="生活用品">生活用品</option>
@@ -241,6 +257,7 @@
               <label>
                 主要颜色
                 <select name="color" required>
+                  <option value="">待确认颜色</option>
                   <option value="黑色">黑色</option>
                   <option value="白色">白色</option>
                   <option value="蓝色">蓝色</option>
@@ -299,7 +316,7 @@
                 <small style="color:var(--text2);font-size:12px;">请填写物品实际丢失或捡到的时间，不是发布时间</small>
               </label>
               <label>
-                联系方式（实名后对方可见）
+                联系方式（完成身份信息登记后对方可见）
                 <input name="contact" required placeholder="微信 / 手机号" />
               </label>
             </div>
@@ -337,6 +354,10 @@
                 <p>上传图片后显示提取结果。</p>
               </div>
             </div>
+            <label class="ai-confirmation" id="aiFieldConfirmation" hidden>
+              <input id="confirmExtractedFields" type="checkbox" />
+              <span>我已人工核对类型、物品、地点、时间和联系方式；待确认字段已修改或接受为空。</span>
+            </label>
             <button class="submit-button" type="submit">发布并计算匹配</button>
           </form>
         </section>
@@ -345,8 +366,8 @@
         <section class="view" id="view-match" aria-labelledby="match-heading">
           <div class="section-head">
             <div>
-              <h3 id="match-heading">AI 智能匹配</h3>
-              <p>从你发布的或选中的信息出发，AI 在 7 个维度计算候选匹配项并解释来源。</p>
+              <h3 id="match-heading">多模态可解释匹配</h3>
+              <p>规则加权引擎融合 AI 图像语义，在 7 个维度排序候选并展示依据；匹配分用于候选排序，不代表识别准确率。</p>
             </div>
           </div>
           <div class="match-layout">
@@ -360,7 +381,7 @@
               <div class="selected-card" id="selectedRecord"></div>
               <div class="score-note">
                 <strong>权重</strong>
-                <span>类别 13% · 颜色 8% · 地点 14% · 时间 11% · 文本 14% · 图像 20% · 语义 20%</span>
+                <span>基础权重：类别 13% · 颜色 8% · 地点 14% · 时间 11% · 文本 14% · 图像 20% · 语义 20%；字段缺失时动态重分配并下调置信度。</span>
               </div>
             </div>
             <div class="match-results" id="matchResults"></div>
@@ -389,50 +410,10 @@
           <div class="section-head">
             <div>
               <h3 id="profile-heading">我的</h3>
-              <p>账号信息、信用积分、徽章、实名认证、我发布的记录。</p>
+              <p>账号信息、信用积分、徽章、身份信息登记、我发布的记录。</p>
             </div>
           </div>
           <div id="profileContent"></div>
-        </section>
-
-        <!-- ============== 视图：数据概览 ============== -->
-        <section class="view" id="view-stats" aria-labelledby="stats-heading">
-          <div class="section-head">
-            <div>
-              <h3 id="stats-heading">数据概览</h3>
-              <p>系统价值与算法运行结果。</p>
-            </div>
-          </div>
-          <div class="metric-grid" id="metricGrid"></div>
-          <div class="explain-panel">
-            <h4>v2 核心创新</h4>
-            <div class="algorithm-grid">
-              <div>
-                <strong>AI 自然语言结构化</strong>
-                <p>说一句话，AI 自动提取类型/类别/颜色/地点/时间/描述。</p>
-              </div>
-              <div>
-                <strong>三层隐私模糊化</strong>
-                <p>位置→XX路附近、时间→上午/下午、描述→保留前 20 字，实名握手后解锁。</p>
-              </div>
-              <div>
-                <strong>物品状态分流</strong>
-                <p>原地/代保管/已交机构/不确定，不同状态走不同流程。</p>
-              </div>
-              <div>
-                <strong>代保管节点 + 取件码</strong>
-                <p>对接便利店/丰巢/物业，6 位防混淆取件码安全交接。</p>
-              </div>
-              <div>
-                <strong>公共机构对接</strong>
-                <p>派出所/地铁失物中心/机场，"官方认证"标签可信。</p>
-              </div>
-              <div>
-                <strong>信用积分 + 徽章</strong>
-                <p>归还+10 / 发布+5 / 举报-20，城市好心人成长体系。</p>
-              </div>
-            </div>
-          </div>
         </section>
       <!-- ============== Inspector 右侧栏 ============== -->
       <aside class="inspector" id="inspectorPanel" aria-label="信息面板">
@@ -485,53 +466,58 @@
       <div id="detailContent"></div>
     </dialog>
 
-    <!-- 微信登录弹窗（Mock） -->
+    <!-- 拾寻邮箱密码账号 -->
     <dialog id="loginDialog" class="login-dialog">
       <div class="login-card">
         <div class="login-header">
-          <div class="wechat-icon" aria-hidden="true">微</div>
-          <h3>微信登录</h3>
-          <p>请填写昵称完成登录</p>
+          <div class="account-icon" aria-hidden="true">拾</div>
+          <h3>拾寻账号</h3>
+          <p>使用邮箱和密码注册或登录，密码由 Supabase Auth 安全管理。</p>
         </div>
         <form id="loginForm" class="login-form">
           <label>
             <span>昵称</span>
-            <input name="nickname" placeholder="留空将自动生成" autocomplete="off" />
+            <input name="nickname" minlength="2" maxlength="30" placeholder="注册时填写，2—30 个字符" autocomplete="nickname" />
           </label>
           <label>
-            <span>头像（选填，emoji 或 URL）</span>
-            <input name="avatar_url" placeholder="😀 或 https://..." autocomplete="off" />
+            <span>邮箱</span>
+            <input name="email" type="email" maxlength="254" required placeholder="name@example.com" autocomplete="email" />
           </label>
+          <label>
+            <span>密码</span>
+            <input name="password" type="password" minlength="8" maxlength="72" required placeholder="8—72 位" autocomplete="current-password" />
+          </label>
+          <div class="form-error" id="loginError" role="alert"></div>
           <div class="login-actions">
-            <button type="button" class="ghost-button" id="loginGuestBtn">游客登录</button>
-            <button type="submit" class="primary-action wechat-action">确认登录</button>
+            <button type="button" class="ghost-button" id="registerAccountBtn">注册账号</button>
+            <button type="submit" class="primary-action">登录</button>
           </div>
           <button type="button" class="text-button" id="closeLoginBtn">关闭</button>
         </form>
       </div>
     </dialog>
 
-    <!-- 实名认证弹窗（Mock） -->
+    <!-- 身份信息登记弹窗 -->
     <dialog id="verifyDialog" class="login-dialog">
       <div class="login-card">
         <div class="login-header">
           <div class="verify-icon" aria-hidden="true">✓</div>
-          <h3>实名认证</h3>
-          <p>请输入真实姓名和身份证末 4 位完成认证</p>
+          <h3>身份信息登记</h3>
+          <p>用于认领权限与责任确认，当前不连接权威实名机构。</p>
         </div>
         <form id="verifyForm" class="login-form">
           <label>
-            <span>真实姓名</span>
-            <input name="real_name" required placeholder="请输入姓名" />
+            <span>登记姓名</span>
+            <input name="real_name" required placeholder="请输入姓名" autocomplete="off" />
           </label>
           <label>
-            <span>身份证末 4 位</span>
-            <input name="id_card_last4" required pattern="\d{4}" maxlength="4" placeholder="0000" />
+            <span>身份校验码（4 位）</span>
+            <input name="id_card_last4" required pattern="\d{4}" maxlength="4" placeholder="请输入 4 位数字" autocomplete="off" inputmode="numeric" />
           </label>
           <div class="form-error" id="verifyError" role="alert"></div>
           <div class="login-actions">
             <button type="button" class="text-button" id="closeVerifyBtn">取消</button>
-            <button type="submit" class="primary-action">提交认证</button>
+            <button type="submit" class="primary-action">提交登记</button>
           </div>
         </form>
       </div>
@@ -543,7 +529,7 @@
         <div class="login-header">
           <div class="profile-avatar" id="userDialogAvatar" aria-hidden="true">?</div>
           <h3 id="userDialogNickname">用户</h3>
-          <p id="userDialogStatus">未实名认证</p>
+          <p id="userDialogStatus">未完成身份信息登记</p>
         </div>
         <div class="user-dialog-body">
           <div class="user-dialog-info" id="userDialogInfo"></div>
@@ -553,7 +539,7 @@
             <button class="secondary-button" id="addAccountBtn" type="button">+ 添加新账号</button>
           </div>
           <div class="login-actions" style="flex-direction:column;gap:10px;margin-top:16px;">
-            <button type="button" class="primary-action" id="userDialogVerifyBtn">完成实名认证</button>
+            <button type="button" class="primary-action" id="userDialogVerifyBtn">完成身份信息登记</button>
             <button type="button" class="ghost-button" id="userDialogLogoutBtn" style="color:var(--red);">退出登录</button>
             <button type="button" class="text-button" id="closeUserBtn">关闭</button>
           </div>

@@ -1,23 +1,19 @@
 {
-  "name": "campus-lost-found-ai-matcher",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "start": "node local-server.js",
-    "dev": "node local-server.js",
-    "deploy": "vercel --prod"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "vercel": "^54.14.0"
-  },
-  "devDependencies": {
-    "fontkit": "^2.0.4",
-    "linebreak": "^1.1.0",
-    "pptxgenjs": "^4.0.1",
-    "prismjs": "^1.30.0",
-    "skia-canvas": "^3.0.8"
-  }
+    "name": "campus-lost-found-ai-matcher",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "start": "node local-server.js",
+        "dev": "node local-server.js",
+        "check": "node scripts/verify-project.js",
+        "test:heuristic": "node scripts/heuristic-regression.js",
+        "test:smoke": "node scripts/smoke-test.js",
+        "test:observability": "node scripts/model-observability-test.js",
+        "test:evaluation": "node scripts/evaluate-offline.js",
+        "test:claim-flow": "node scripts/interview-claim-flow-test.js",
+        "test:auth": "node scripts/supabase-auth-contract-test.js"
+    },
+    "engines": {
+        "node": ">=18"
+    }
 }

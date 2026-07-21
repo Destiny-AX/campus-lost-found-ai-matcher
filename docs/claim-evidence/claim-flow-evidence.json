@@ -1,0 +1,294 @@
+{
+  "generated_at": "2026-07-17T11:42:44.702Z",
+  "environment": "isolated_in_memory_postgrest_contract_harness",
+  "production_database_written": false,
+  "preview_database_written": false,
+  "limitation": "当前没有隔离的 Preview Supabase 环境变量，因此没有对 Vercel Preview 或生产 Supabase 执行写入。本证据验证真实 API 代码路径与 PostgREST 状态契约，不等同于线上数据库闭环实测。",
+  "test_prefix": "[INTERVIEW_TEST]",
+  "statuses": [
+    {
+      "step": "用户 A 发布 [INTERVIEW_TEST] 招领记录",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "游客联系方式被保护",
+      "status": "PASS",
+      "http_status": 200,
+      "contact_exposed": false
+    },
+    {
+      "step": "游客精确位置被隐藏",
+      "status": "PASS",
+      "exact_location_exposed": false
+    },
+    {
+      "step": "已实名但未通过认领的用户 B 仍无法查看联系方式",
+      "status": "PASS",
+      "contact_exposed": false
+    },
+    {
+      "step": "发布记录可以成为七维匹配候选",
+      "status": "PASS",
+      "score": 85.2,
+      "coverage": 80
+    },
+    {
+      "step": "用户 B 发起认领申请",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "用户 A 收到认领通知",
+      "status": "PASS",
+      "http_status": 200,
+      "notification_type": "claim_request"
+    },
+    {
+      "step": "用户 B 不能审核自己的认领申请",
+      "status": "PASS",
+      "http_status": 403
+    },
+    {
+      "step": "用户 A 审核通过认领",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "用户 B 收到审核通过通知",
+      "status": "PASS",
+      "http_status": 200,
+      "notification_type": "claim_approved"
+    },
+    {
+      "step": "仅审核通过后的用户 B 解锁联系方式",
+      "status": "PASS",
+      "contact_unlocked": true,
+      "contact_value_recorded": false
+    },
+    {
+      "step": "用户 A 标记已归还",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "发布者不能代替认领者确认收到",
+      "status": "PASS",
+      "http_status": 403
+    },
+    {
+      "step": "用户 B 确认收到并完成归还闭环",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "找回状态包含双方确认",
+      "status": "PASS",
+      "http_status": 200
+    },
+    {
+      "step": "数据库记录状态更新为已找回",
+      "status": "PASS",
+      "final_status": "已找回"
+    },
+    {
+      "step": "仅清理本轮 [INTERVIEW_TEST] 数据",
+      "status": "PASS",
+      "remaining_test_rows": 0,
+      "credit_logs_restored": true,
+      "user_state_restored": true
+    }
+  ],
+  "state_snapshots": [
+    {
+      "label": "before",
+      "records": [],
+      "claim_requests": [],
+      "notifications": [],
+      "resolved": []
+    },
+    {
+      "label": "after_publish",
+      "records": [
+        {
+          "id": "[INTERVIEW_TEST]record-claim-flow",
+          "status": "待认领",
+          "claimed_by": null
+        }
+      ],
+      "claim_requests": [],
+      "notifications": [],
+      "resolved": []
+    },
+    {
+      "label": "after_claim",
+      "records": [
+        {
+          "id": "[INTERVIEW_TEST]record-claim-flow",
+          "status": "待认领",
+          "claimed_by": null
+        }
+      ],
+      "claim_requests": [
+        {
+          "id": "claim_1784288564697_3kvdpu",
+          "status": "pending",
+          "claimant_id": "user-b"
+        }
+      ],
+      "notifications": [
+        {
+          "type": "claim_request",
+          "user_id": "user-a",
+          "is_read": false
+        }
+      ],
+      "resolved": []
+    },
+    {
+      "label": "after_approval",
+      "records": [
+        {
+          "id": "[INTERVIEW_TEST]record-claim-flow",
+          "status": "已认领",
+          "claimed_by": "user-b"
+        }
+      ],
+      "claim_requests": [
+        {
+          "id": "claim_1784288564697_3kvdpu",
+          "status": "approved",
+          "claimant_id": "user-b"
+        }
+      ],
+      "notifications": [
+        {
+          "type": "claim_request",
+          "user_id": "user-a",
+          "is_read": false
+        },
+        {
+          "type": "claim_approved",
+          "user_id": "user-b",
+          "is_read": false
+        }
+      ],
+      "resolved": []
+    },
+    {
+      "label": "after_finder_returned",
+      "records": [
+        {
+          "id": "[INTERVIEW_TEST]record-claim-flow",
+          "status": "已认领",
+          "claimed_by": "user-b"
+        }
+      ],
+      "claim_requests": [
+        {
+          "id": "claim_1784288564697_3kvdpu",
+          "status": "approved",
+          "claimant_id": "user-b"
+        }
+      ],
+      "notifications": [
+        {
+          "type": "claim_request",
+          "user_id": "user-a",
+          "is_read": false
+        },
+        {
+          "type": "claim_approved",
+          "user_id": "user-b",
+          "is_read": false
+        },
+        {
+          "type": "finder_confirmed",
+          "user_id": "user-b",
+          "is_read": false
+        }
+      ],
+      "resolved": [
+        {
+          "finder_confirmed": true,
+          "owner_confirmed": false,
+          "credit_awarded": false
+        }
+      ]
+    },
+    {
+      "label": "after_complete",
+      "records": [
+        {
+          "id": "[INTERVIEW_TEST]record-claim-flow",
+          "status": "已找回",
+          "claimed_by": "user-b"
+        }
+      ],
+      "claim_requests": [
+        {
+          "id": "claim_1784288564697_3kvdpu",
+          "status": "approved",
+          "claimant_id": "user-b"
+        }
+      ],
+      "notifications": [
+        {
+          "type": "claim_request",
+          "user_id": "user-a",
+          "is_read": false
+        },
+        {
+          "type": "claim_approved",
+          "user_id": "user-b",
+          "is_read": false
+        },
+        {
+          "type": "finder_confirmed",
+          "user_id": "user-b",
+          "is_read": false
+        },
+        {
+          "type": "credit_change",
+          "user_id": "user-a",
+          "is_read": false
+        },
+        {
+          "type": "credit_change",
+          "user_id": "user-b",
+          "is_read": false
+        },
+        {
+          "type": "recovery_complete",
+          "user_id": "user-a",
+          "is_read": false
+        },
+        {
+          "type": "recovery_complete",
+          "user_id": "user-b",
+          "is_read": false
+        }
+      ],
+      "resolved": [
+        {
+          "finder_confirmed": true,
+          "owner_confirmed": true,
+          "credit_awarded": true
+        }
+      ]
+    },
+    {
+      "label": "after_cleanup",
+      "records": [],
+      "claim_requests": [],
+      "notifications": [],
+      "resolved": []
+    }
+  ],
+  "cleanup": {
+    "scoped_to_created_record": true,
+    "remaining_test_rows": 0,
+    "credit_logs_restored": true,
+    "user_state_restored": true
+  }
+}

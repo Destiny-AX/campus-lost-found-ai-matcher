@@ -1,0 +1,13 @@
+﻿{
+    "generated_at":  "2026-07-12T10:19:06.3533636Z",
+    "verification":  "实际本地 API + Smoke Test",
+    "source":  "demo_memory",
+    "initial_total":  40,
+    "lost":  20,
+    "found":  20,
+    "all_seed_records_marked_demo":  true,
+    "after_offline_publish_total":  41,
+    "after_publish_evidence":  "smoke-test-output.txt",
+    "page_render_evidence":  "docs/screenshots/01-首页失物广场_demo-memory.png",
+    "metrics_source":  "前端基于 API 返回 records 计算，未硬编码 40"
+}

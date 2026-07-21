@@ -2,14 +2,16 @@
 
 // 账号鉴权 API
 // 路由：
-//   POST /api/auth?action=wechat-login   { nickname, avatar_url, openid? }    Mock 微信登录
-//   POST /api/auth?action=guest-login    { nickname? }                         游客登录
+//   POST /api/auth?action=password-register { email, password, nickname? }     邮箱注册
+//   POST /api/auth?action=password-login    { email, password }                邮箱登录
+//   POST /api/auth?action=guest-login       { nickname? }                      仅离线测试兜底
 //   GET  /api/auth?action=me                                                   获取当前用户
-//   POST /api/auth?action=verify-identity { real_name, id_card_last4 }         Mock 实名认证
+//   POST /api/auth?action=verify-identity { real_name, id_card_last4 }         身份信息登记
 
 const crypto = require("crypto");
 const {
   getSupabaseConfig,
+  getSupabaseAuthConfig,
   supabaseFetch,
   readJsonBody,
   sendJson,
@@ -27,7 +29,7 @@ const memoryUsers = new Map();
 // 徽章定义
 const BADGE_DEFS = {
   "newbie": { emoji: "🌱", name: "新手上路", rarity: "common", desc: "加入拾寻" },
-  "verified": { emoji: "✅", name: "实名认证", rarity: "rare", desc: "完成实名认证" },
+  "verified": { emoji: "✅", name: "身份信息登记", rarity: "rare", desc: "完成身份信息登记" },
   "first_publish": { emoji: "📝", name: "初次发布", rarity: "common", desc: "首次发布信息" },
   "match_master": { emoji: "🎯", name: "匹配达人", rarity: "rare", desc: "产生一次80%+匹配" },
   "helper": { emoji: "🤝", name: "助人为乐", rarity: "epic", desc: "帮助找回1件物品" },
@@ -57,7 +59,7 @@ module.exports = async function handler(req, res) {
     const action = url.searchParams.get("action") || "me";
 
     // 限流：登录类接口每IP每分钟最多10次
-    if (["wechat-login", "guest-login", "verify-identity"].includes(action)) {
+    if (["password-register", "password-login", "guest-login", "verify-identity"].includes(action)) {
       const clientIp = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
       const limit = checkRateLimit(`auth:${clientIp}`, 60000, 10);
       if (!limit.ok) {
@@ -67,7 +69,8 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "me") return handleMe(req, res);
-    if (action === "wechat-login") return handleWechatLogin(req, res);
+    if (action === "password-register") return handlePasswordRegister(req, res);
+    if (action === "password-login") return handlePasswordLogin(req, res);
     if (action === "guest-login") return handleGuestLogin(req, res);
     if (action === "verify-identity") return handleVerifyIdentity(req, res);
     if (action === "add-exp") return handleAddExp(req, res);
@@ -94,29 +97,180 @@ async function handleMe(req, res) {
   }
 }
 
-async function handleWechatLogin(req, res) {
-  const body = await readJsonBody(req);
-  const nickname = String(body.nickname || "").trim() || `微信用户${randomSuffix()}`;
-  const avatarUrl = String(body.avatar_url || "").trim();
-  // demo 阶段 openid 自动生成；生产环境应通过 code 换取
-  const openid = String(body.openid || "").trim() || `mock_openid_${crypto.randomBytes(8).toString("hex")}`;
-
-  let user = await findUserByOpenid(openid);
-  if (!user) {
-    user = await createUser({
-      nickname,
-      avatar_url: avatarUrl,
-      wechat_openid: openid,
-      login_provider: "wechat_mock",
-      role: "user",
-    });
+function validatePasswordInput(body, requireNickname = false) {
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = typeof body.password === "string" ? body.password : "";
+  const nickname = String(body.nickname || "").trim();
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "请输入有效的邮箱地址" };
   }
-  const token = signJwt({ sub: user.id, nickname: user.nickname, provider: "wechat_mock", role: user.role || "user" });
-  // 返回完整的 user 数据供前端使用（避免 JWT payload 中的 exp 与用户经验值冲突）
-  sendJson(res, 200, { token, user });
+  if (password.length < 8 || password.length > 72) {
+    return { ok: false, error: "密码长度需为 8—72 位" };
+  }
+  if (requireNickname && (nickname.length < 2 || nickname.length > 30)) {
+    return { ok: false, error: "昵称长度需为 2—30 个字符" };
+  }
+  return { ok: true, email, password, nickname };
+}
+
+async function callSupabaseAuth(config, path, body) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const headers = {
+      apikey: config.key,
+      "Content-Type": "application/json",
+    };
+    // New sb_publishable_/sb_secret_ API keys are opaque values, not JWTs.
+    // Only legacy JWT keys can be sent as Authorization Bearer credentials.
+    if (/^eyJ[^.]*\.[^.]+\.[^.]+$/.test(config.key)) {
+      headers.Authorization = "Bearer " + config.key;
+    }
+    const response = await fetch(`${config.url}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    let payload = {};
+    try { payload = await response.json(); } catch (error) { payload = {}; }
+    return { ok: response.ok, status: response.status, payload };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function mapProviderError(result, action) {
+  const message = String(
+    result?.payload?.msg ||
+    result?.payload?.message ||
+    result?.payload?.error_description ||
+    result?.payload?.error ||
+    ""
+  ).toLowerCase();
+  if (message.includes("already") || message.includes("registered") || message.includes("exists")) {
+    return "该邮箱已注册，请直接登录";
+  }
+  if (message.includes("email not confirmed")) return "请先完成邮箱验证，再登录";
+  if (action === "login" && (result?.status === 400 || result?.status === 401 || result?.status === 422)) {
+    return "邮箱或密码错误";
+  }
+  if (result?.status === 429) return "尝试次数过多，请稍后再试";
+  return "账号服务暂时不可用，请稍后重试";
+}
+
+async function ensurePasswordProfile(providerUser, nickname) {
+  const existing = await fetchUserById(providerUser.id);
+  if (existing) return existing;
+  const fallbackNickname = String(providerUser.email || "拾寻用户").split("@")[0].slice(0, 30) || "拾寻用户";
+  return createUser({
+    id: providerUser.id,
+    nickname: nickname || providerUser.user_metadata?.nickname || fallbackNickname,
+    avatar_url: "",
+    wechat_openid: "",
+    login_provider: "password",
+    role: "user",
+  });
+}
+
+function sendPasswordSession(res, providerPayload, profile, metadata = {}) {
+  const providerUser = providerPayload.user;
+  const user = {
+    ...profile,
+    id: providerUser.id,
+    sub: providerUser.id,
+    provider: "password",
+    email_confirmed: Boolean(providerUser.email_confirmed_at || providerUser.confirmed_at),
+  };
+  const token = signJwt({
+    sub: user.id,
+    nickname: user.nickname,
+    provider: "password",
+    verified: Boolean(user.is_verified),
+    role: user.role || "user",
+  });
+  sendJson(res, 200, { token, user, ...metadata });
+}
+
+async function handlePasswordRegister(req, res) {
+  const body = await readJsonBody(req);
+  const input = validatePasswordInput(body, true);
+  if (!input.ok) return sendJson(res, 400, { error: input.error });
+  const config = getSupabaseAuthConfig();
+  if (!config) return sendJson(res, 503, { error: "邮箱账号服务尚未配置" });
+  try {
+    const result = await callSupabaseAuth(config, "/auth/v1/signup", {
+      email: input.email,
+      password: input.password,
+      data: { nickname: input.nickname },
+    });
+    if (!result.ok) {
+      console.warn("[auth] provider_failed action=register status=" + result.status + " key_source=" + config.keySource);
+      return sendJson(res, result.status >= 400 && result.status < 500 ? result.status : 502, {
+        error: mapProviderError(result, "register"),
+      });
+    }
+    if (!result.payload?.user?.id) {
+      // Supabase may return an intentionally ambiguous 200 response for an existing address.
+      // Confirm with the submitted password instead of reporting a false service outage.
+      const loginResult = await callSupabaseAuth(config, "/auth/v1/token?grant_type=password", {
+        email: input.email,
+        password: input.password,
+      });
+      if (loginResult.ok && loginResult.payload?.user?.id && loginResult.payload?.access_token) {
+        const profile = await ensurePasswordProfile(loginResult.payload.user, input.nickname);
+        return sendPasswordSession(res, loginResult.payload, profile, { registration_state: "account_available" });
+      }
+      console.warn("[auth] ambiguous_register_followup status=" + loginResult.status + " key_source=" + config.keySource);
+      return sendJson(res, loginResult.status >= 400 && loginResult.status < 500 ? loginResult.status : 502, {
+        error: mapProviderError(loginResult, "login"),
+      });
+    }
+    if (!(result.payload.access_token || result.payload.session?.access_token)) {
+      return sendJson(res, 202, {
+        ok: true,
+        confirmation_required: true,
+        message: "注册成功，请查收验证邮件后再登录",
+      });
+    }
+    const profile = await ensurePasswordProfile(result.payload.user, input.nickname);
+    return sendPasswordSession(res, result.payload, profile);
+  } catch (error) {
+    const message = error?.name === "AbortError" ? "账号服务响应超时，请稍后重试" : "账号服务连接失败，请稍后重试";
+    return sendJson(res, error?.name === "AbortError" ? 504 : 502, { error: message });
+  }
+}
+
+async function handlePasswordLogin(req, res) {
+  const body = await readJsonBody(req);
+  const input = validatePasswordInput(body, false);
+  if (!input.ok) return sendJson(res, 400, { error: input.error });
+  const config = getSupabaseAuthConfig();
+  if (!config) return sendJson(res, 503, { error: "邮箱账号服务尚未配置" });
+  try {
+    const result = await callSupabaseAuth(config, "/auth/v1/token?grant_type=password", {
+      email: input.email,
+      password: input.password,
+    });
+    if (!result.ok || !result.payload?.user?.id || !result.payload?.access_token) {
+      console.warn("[auth] provider_failed action=login status=" + result.status + " key_source=" + config.keySource);
+      return sendJson(res, result.status >= 400 && result.status < 500 ? result.status : 502, {
+        error: mapProviderError(result, "login"),
+      });
+    }
+    const profile = await ensurePasswordProfile(result.payload.user, "");
+    return sendPasswordSession(res, result.payload, profile);
+  } catch (error) {
+    const message = error?.name === "AbortError" ? "账号服务响应超时，请稍后重试" : "账号服务连接失败，请稍后重试";
+    return sendJson(res, error?.name === "AbortError" ? 504 : 502, { error: message });
+  }
 }
 
 async function handleGuestLogin(req, res) {
+  if (getSupabaseConfig()) {
+    sendJson(res, 410, { error: "游客登录已关闭，请使用邮箱和密码登录" });
+    return;
+  }
   const body = await readJsonBody(req);
   const nickname = String(body.nickname || "").trim() || `路人${randomSuffix()}`;
   const user = await createUser({
@@ -139,27 +293,28 @@ async function handleVerifyIdentity(req, res) {
   const body = await readJsonBody(req);
   const realName = String(body.real_name || "").trim();
   const idLast4 = String(body.id_card_last4 || "").trim();
-  // demo 阶段 mock 校验：姓名 ≥ 2 字 + 末 4 位是数字
+  // 身份信息格式校验：姓名 ≥ 2 字 + 末 4 位是数字
   if (realName.length < 2 || !/^\d{4}$/.test(idLast4)) {
-    sendJson(res, 400, { error: "实名信息格式不正确（mock 校验）" });
+    sendJson(res, 400, { error: "身份信息格式不正确" });
     return;
   }
   const user = await fetchUserById(current.sub);
-  // 幂等校验：已实名认证的用户不再重复发放经验
+  // 幂等校验：已完成身份信息登记的用户不再重复发放经验
   // 同时检查数据库中的 is_verified 和 JWT 中的 verified，防止 fetchUserById 失败时绕过校验
   if (user?.is_verified || current.verified) {
     sendJson(res, 200, { alreadyVerified: true, user: user || { id: current.sub, nickname: current.nickname, is_verified: true }, unlocked: { badge: null, expDelta: 0, levelUp: false } });
     return;
   }
   const oldBadges = user?.badges || ["🌱 新手上路"];
-  const newBadges = oldBadges.includes("✅ 实名认证") ? oldBadges : [...oldBadges, "✅ 实名认证"];
+  const normalizedBadges = oldBadges.map((badge) => badge === "✅ 实名认证" ? "✅ 身份信息登记" : badge);
+  const newBadges = normalizedBadges.includes("✅ 身份信息登记") ? normalizedBadges : [...normalizedBadges, "✅ 身份信息登记"];
   const oldExp = user?.exp || 0;
   const newExp = oldExp + 50;
   const newLevel = calculateLevel(newExp);
   const updated = await updateUser(current.sub, {
     is_verified: true,
     real_name_hash: crypto.createHash("sha256").update(realName + idLast4).digest("hex").slice(0, 16),
-    credit_score: 10, // 实名认证后信用分设为10（基准值）
+    credit_score: 10, // 完成身份信息登记后信用分设为10（基准值）
     badges: newBadges,
     exp: newExp,
     level: newLevel,
@@ -272,29 +427,6 @@ function randomSuffix() {
 
 // ============== 数据访问层（Supabase 优先，内存兜底） ==============
 
-async function findUserByOpenid(openid) {
-  if (!openid) return null;
-  const config = getSupabaseConfig();
-  if (!config) {
-    for (const user of memoryUsers.values()) {
-      if (user.wechat_openid === openid) return user;
-    }
-    return null;
-  }
-  try {
-    const response = await supabaseFetch(
-      config,
-      `/rest/v1/${USERS_TABLE}?wechat_openid=eq.${encodeURIComponent(openid)}&select=*&limit=1`,
-      { method: "GET" },
-    );
-    if (!response.ok) return null;
-    const rows = await response.json();
-    return rows[0] || null;
-  } catch (error) {
-    return null;
-  }
-}
-
 async function fetchUserById(id) {
   if (!id) return null;
   const config = getSupabaseConfig();
@@ -314,7 +446,7 @@ async function fetchUserById(id) {
 }
 
 async function createUser(fields) {
-  const id = `user_${crypto.randomBytes(8).toString("hex")}`;
+  const id = fields.id || `user_${crypto.randomBytes(8).toString("hex")}`;
   const now = new Date().toISOString();
   const record = {
     id,

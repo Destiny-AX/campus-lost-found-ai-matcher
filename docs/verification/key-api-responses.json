@@ -1,0 +1,74 @@
+﻿{
+    "generated_at":  "2026-07-12T10:19:26.4606122Z",
+    "records":  {
+                    "http_status":  200,
+                    "source":  "demo_memory",
+                    "count":  40,
+                    "sample":  {
+                                   "id":  "demo-lost-01",
+                                   "type":  "lost",
+                                   "title":  "黑色AirPods Pro耳机盒",
+                                   "category":  "电子设备",
+                                   "location":  "三里屯地铁站附近",
+                                   "time":  "6月5日上午",
+                                   "is_fuzzy":  true,
+                                   "is_demo":  true
+                               }
+                },
+    "visitor_found_redacted":  {
+                                   "id":  "demo-found-01",
+                                   "type":  "found",
+                                   "title":  "黑色无线耳机充电盒",
+                                   "location":  "三里屯地铁站附近",
+                                   "contact":  "__FUZZY_CONTACT__",
+                                   "is_fuzzy":  true,
+                                   "is_demo":  true
+                               },
+    "structured_input":  {
+                             "http_status":  200,
+                             "request_text":  "昨晚在中国传媒大学图书馆丢了一个黑色 AirPods Pro，充电盒有一道划痕。",
+                             "response":  {
+                                              "structured":  {
+                                                                 "type":  "lost",
+                                                                 "item_name":  "AirPods Pro 充电盒",
+                                                                 "title":  "黑色 AirPods Pro 充电盒",
+                                                                 "category":  "电子设备",
+                                                                 "color":  "黑色",
+                                                                 "location":  "中国传媒大学图书馆",
+                                                                 "district":  "朝阳区",
+                                                                 "street":  "中国传媒大学",
+                                                                 "detail_location":  "中国传媒大学图书馆",
+                                                                 "time":  "",
+                                                                 "normalized_date":  "2026-07-11",
+                                                                 "raw_time_expression":  "昨晚",
+                                                                 "time_precision":  "date_period",
+                                                                 "time_period":  "晚上",
+                                                                 "time_zone":  "Asia/Shanghai",
+                                                                 "time_needs_confirmation":  true,
+                                                                 "contact":  "",
+                                                                 "contact_type":  "",
+                                                                 "features":  [
+                                                                                  "充电盒有一道划痕"
+                                                                              ],
+                                                                 "feature_text":  "充电盒有一道划痕",
+                                                                 "description":  "昨晚在中国传媒大学图书馆丢了一个黑色 AirPods Pro，充电盒有一道划痕。",
+                                                                 "item_status":  "unknown",
+                                                                 "field_status":  {
+                                                                                      "type":  "高置信",
+                                                                                      "item":  "高置信",
+                                                                                      "title":  "高置信",
+                                                                                      "category":  "高置信",
+                                                                                      "color":  "高置信",
+                                                                                      "location":  "高置信",
+                                                                                      "time":  "待确认",
+                                                                                      "contact":  "未识别",
+                                                                                      "features":  "高置信"
+                                                                                  },
+                                                                 "requires_confirmation":  true,
+                                                                 "confidence":  0.68
+                                                             },
+                                              "source":  "heuristic",
+                                              "ai_error":  "API Key 未配置"
+                                          }
+                         }
+}

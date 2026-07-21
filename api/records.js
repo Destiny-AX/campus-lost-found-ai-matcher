@@ -44,7 +44,7 @@ const SEED_RECORDS = [
     street: "三里屯",
     detail_location: "地铁站A口安检处",
     owner_id: "",
-    image_data: "/images/耳机.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "AirPods Pro充电盒",
@@ -75,7 +75,7 @@ const SEED_RECORDS = [
     street: "三里屯",
     detail_location: "地铁站A口",
     owner_id: "",
-    image_data: "/images/耳机.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "无线耳机充电盒",
@@ -106,7 +106,7 @@ const SEED_RECORDS = [
     street: "王府井",
     detail_location: " 1号线转8号线换乘通道",
     owner_id: "",
-    image_data: "/images/卡.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "学生校园卡",
@@ -137,7 +137,7 @@ const SEED_RECORDS = [
     street: "王府井",
     detail_location: "地铁站服务中心",
     owner_id: "",
-    image_data: "/images/卡.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "蓝色校园卡",
@@ -168,7 +168,7 @@ const SEED_RECORDS = [
     street: "中关村",
     detail_location: "欧美汇B1层美食区",
     owner_id: "",
-    image_data: "/images/钥匙.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -199,7 +199,7 @@ const SEED_RECORDS = [
     street: "中关村",
     detail_location: "欧美汇服务台",
     owner_id: "",
-    image_data: "/images/钥匙.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -293,7 +293,7 @@ const SEED_RECORDS = [
     street: "首都机场",
     detail_location: "T3航站楼C区登机口附近",
     owner_id: "",
-    image_data: "/images/包.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -324,7 +324,7 @@ const SEED_RECORDS = [
     street: "首都机场",
     detail_location: "机场失物招领处",
     owner_id: "",
-    image_data: "/images/包.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -417,7 +417,7 @@ const SEED_RECORDS = [
     street: "五道口",
     detail_location: "万达广场三楼餐饮区",
     owner_id: "",
-    image_data: "/images/杯.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "透明玻璃水杯",
@@ -448,7 +448,7 @@ const SEED_RECORDS = [
     street: "五道口",
     detail_location: "万达广场服务台",
     owner_id: "",
-    image_data: "/images/杯.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "星巴克玻璃杯",
@@ -479,7 +479,7 @@ const SEED_RECORDS = [
     street: "上地",
     detail_location: "地铁站站台座椅",
     owner_id: "",
-    image_data: "/images/键盘.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "iPad Pro",
@@ -510,7 +510,7 @@ const SEED_RECORDS = [
     street: "上地",
     detail_location: "地铁站服务中心",
     owner_id: "",
-    image_data: "/images/键盘.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色平板电脑",
@@ -603,7 +603,7 @@ const SEED_RECORDS = [
     street: "回龙观",
     detail_location: "地铁站洗手间",
     owner_id: "",
-    image_data: "/images/手环.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "灰色运动手环",
@@ -634,7 +634,7 @@ const SEED_RECORDS = [
     street: "回龙观",
     detail_location: "地铁站服务台",
     owner_id: "",
-    image_data: "/images/手环.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "灰色智能手环",
@@ -785,7 +785,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "一食堂二楼靠窗座位",
     owner_id: "",
-    image_data: "/images/耳机.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "AirPods 3蓝牙耳机",
@@ -816,7 +816,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "一食堂二楼",
     owner_id: "",
-    image_data: "/images/耳机.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "白色AirPods充电盒",
@@ -847,7 +847,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "图书馆三楼自习区",
     owner_id: "",
-    image_data: "/images/卡.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "校园卡",
@@ -878,7 +878,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "图书馆一楼服务台",
     owner_id: "",
-    image_data: "/images/卡.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "蓝色校园卡",
@@ -909,7 +909,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "48教302教室后排座位",
     owner_id: "",
-    image_data: "/images/包.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -940,7 +940,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "48教值班室",
     owner_id: "",
-    image_data: "/images/包.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "黑色双肩包",
@@ -971,7 +971,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "南操场东侧看台",
     owner_id: "",
-    image_data: "/images/杯.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色保温杯",
@@ -1002,7 +1002,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "南操场东侧看台",
     owner_id: "",
-    image_data: "/images/杯.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色保温杯",
@@ -1033,7 +1033,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "中蓝公寓B区楼下晾晒区",
     owner_id: "",
-    image_data: "/images/兔子.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "粉色毛绒玩偶",
@@ -1064,7 +1064,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "中蓝公寓B区楼下",
     owner_id: "",
-    image_data: "/images/兔子.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "粉色小兔子玩偶",
@@ -1095,7 +1095,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "动画学院机房A03工位",
     owner_id: "",
-    image_data: "/images/键盘.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "机械键盘",
@@ -1126,7 +1126,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "动画学院值班室",
     owner_id: "",
-    image_data: "/images/键盘.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "黑色机械键盘",
@@ -1157,7 +1157,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "中蓝公寓B区门口",
     owner_id: "",
-    image_data: "/images/钥匙.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -1188,7 +1188,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "中蓝公寓B区门口",
     owner_id: "",
-    image_data: "/images/钥匙.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "银色钥匙串",
@@ -1219,7 +1219,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "南操场西侧看台",
     owner_id: "",
-    image_data: "/images/手环.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "智能运动手环",
@@ -1250,7 +1250,7 @@ const SEED_RECORDS = [
     street: "中国传媒大学",
     detail_location: "南操场西侧看台",
     owner_id: "",
-    image_data: "/images/手环.png",
+    image_data: "",
     image_feature: null,
     semantic: {
       object_name: "粉色运动手环",
@@ -1274,6 +1274,9 @@ function initSeedRecords() {
     });
   }
 }
+
+// 无 Supabase 时使用内存示例数据，确保求职作品集可离线演示。
+initSeedRecords();
 
 // Debug用：强制重置内存为纯净种子数据（解决历史残留乱码问题）
 function resetSeedRecords() {
@@ -1299,6 +1302,11 @@ const handler = async function handler(req, res) {
         sendJson(res, 429, { error: "请求过于频繁，请稍后再试", retryAfter: limit.retryAfter });
         return;
       }
+    }
+
+    if (["diag", "sync-status", "sync-seeds"].includes(action) && current?.role !== "admin") {
+      sendJson(res, 403, { error: "仅管理员可访问诊断或种子同步接口" });
+      return;
     }
 
     if (action === "diag") return await handleDiag(req, res);
@@ -1329,7 +1337,8 @@ async function handleList(req, res) {
   const config = getSupabaseConfig();
 
   if (!config) {
-    sendJson(res, 503, { error: "数据库服务未配置，请联系管理员" });
+    const records = [...memoryRecords.values()].map((row) => fromMemoryRow(row, current)).filter(Boolean);
+    sendJson(res, 200, { records, source: "demo_memory", is_demo: true });
     return;
   }
 
@@ -1352,7 +1361,7 @@ async function handleList(req, res) {
     }
     const supabaseRecords = filteredRows.map((row) => fromSupabaseRow(row, current)).filter(Boolean);
     console.log(`[LIST] Returning ${supabaseRecords.length} records`);
-    sendJson(res, 200, { records: supabaseRecords });
+    sendJson(res, 200, { records: supabaseRecords, source: "supabase", is_demo: false });
   } catch (error) {
     console.log(`[LIST] Error: ${error.message}`);
     sendJson(res, 503, { error: "数据库服务异常，请稍后再试" });
@@ -1516,7 +1525,9 @@ async function handleCreate(req, res) {
   const record = normalizeRecord(body.record || body, current);
   const config = getSupabaseConfig();
   if (!config) {
-    sendJson(res, 503, { error: "数据库服务未配置，请联系管理员" });
+    const row = toMemoryRow(record);
+    memoryRecords.set(record.id, row);
+    sendJson(res, 200, { record: fromMemoryRow(row, current), source: "demo_memory", is_demo: true });
     return;
   }
   try {
@@ -1749,9 +1760,11 @@ function toSupabaseRow(record) {
 function fromSupabaseRow(row, currentUser) {
   if (!row) return null;
   const isOwner = currentUser?.sub && row.owner_id === currentUser.sub;
-  const isVerified = currentUser?.verified;
-  // 统一逻辑：未登录且未认证时，所有数据（含示例数据）均模糊化处理
-  const shouldFuzzify = !isOwner && !isVerified;
+  const isVerified = Boolean(currentUser?.verified);
+  const isApprovedClaimant = Boolean(currentUser?.sub && row.claimed_by === currentUser.sub);
+  // 寻物帖：实名后可联系失主；招领帖：实名 + 认领审核通过后才解锁完整信息。
+  const shouldFuzzify = !isOwner && (!isVerified || (row.type === "found" && !isApprovedClaimant));
+  const publicLocation = row.district ? row.district + "范围内" : fuzzifyLocation(row.location);
 
   const record = {
     id: row.id,
@@ -1759,7 +1772,7 @@ function fromSupabaseRow(row, currentUser) {
     title: row.title,
     category: row.category,
     color: row.color,
-    location: shouldFuzzify ? fuzzifyLocation(row.location) : row.location,
+    location: shouldFuzzify ? publicLocation : row.location,
     time: shouldFuzzify ? fuzzifyTime(row.event_time) : row.event_time,
     // 联系方式：未认证使用特殊标记，前端据此渲染"查看联系方式"按钮
     contact: shouldFuzzify ? "__FUZZY_CONTACT__" : row.contact,
@@ -1777,11 +1790,12 @@ function fromSupabaseRow(row, currentUser) {
     is_fuzzy: shouldFuzzify,
     city: row.city || "北京市",
     district: row.district || "",
-    street: row.street || "",
-    detail_location: row.detail_location || "",
+    street: shouldFuzzify ? "" : (row.street || ""),
+    detail_location: shouldFuzzify ? "" : (row.detail_location || ""),
     claim_question: row.claim_question || "",
     is_claimed: !!row.claimed_by,
     is_claimed_by_me: !!(currentUser?.sub && row.claimed_by === currentUser.sub),
+    is_demo: String(row.id || "").startsWith("demo-"),
   };
   return record;
 }
@@ -1912,6 +1926,7 @@ function fuzzifyDescription(description) {
 async function handleClaimRequest(req, res) {
   const current = getCurrentUser(req);
   if (!current) { sendJson(res, 401, { error: "请先登录" }); return; }
+  if (!current.verified) { sendJson(res, 403, { error: "请先完成实名认证（演示版为 Mock）再申请认领" }); return; }
   const body = await readJsonBody(req);
   const recordIdVal = validateString(body.record_id, { required: true, name: "记录ID" });
   if (!recordIdVal.ok) { sendJson(res, 400, { error: recordIdVal.error }); return; }
@@ -1921,7 +1936,16 @@ async function handleClaimRequest(req, res) {
   const answer = answerVal.value;
 
   const config = getSupabaseConfig();
-  if (!config) { sendJson(res, 200, { ok: true, fallback: true }); return; }
+  if (!config) {
+    sendJson(res, 200, {
+      ok: true,
+      fallback: true,
+      delivered: false,
+      mode: "offline_demo",
+      message: "离线单账号体验：已演示认领申请提交动作，不会通知真实发布者。",
+    });
+    return;
+  }
 
   try {
     // 获取记录信息，校验是否为自己发布的物品

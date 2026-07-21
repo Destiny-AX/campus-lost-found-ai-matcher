@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("crypto");
+
 // AI 自然语言结构化提取 API
 // POST /api/structured-input  { text: "..." }
 // → 调用 SiliconFlow 文本模型，把自然语言提取为结构化字段
@@ -18,7 +20,10 @@ const {
 const TEXT_MODEL = process.env.SILICON_FLOW_TEXT_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
 const FALLBACK_MODEL = process.env.SILICON_FLOW_FALLBACK_MODEL || "Qwen/Qwen3-8B";
 const SILICON_FLOW_URL = process.env.SILICON_FLOW_BASE_URL || "https://api.siliconflow.cn/v1/chat/completions";
-const MAX_TOKENS = 800;
+const MAX_TOKENS = 600;
+const TOTAL_BUDGET_MS = clampInteger(process.env.SILICON_FLOW_TEXT_TOTAL_BUDGET_MS, 28000, 5000, 45000);
+const PRIMARY_TIMEOUT_MS = clampInteger(process.env.SILICON_FLOW_TEXT_PRIMARY_TIMEOUT_MS, 18000, 3000, 30000);
+const FALLBACK_TIMEOUT_MS = clampInteger(process.env.SILICON_FLOW_TEXT_FALLBACK_TIMEOUT_MS, 9000, 2000, 20000);
 
 // 允许的类别枚举，AI 输出必须落在这些值上
 const CATEGORIES = ["证件", "电子设备", "生活用品", "学习用品", "钥匙", "箱包", "贵重物品", "其他"];
@@ -59,6 +64,8 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
   try {
     const apiKey = getSiliconFlowApiKey();
     const body = await readJsonBody(req);
@@ -70,50 +77,136 @@ module.exports = async function handler(req, res) {
 
     // 没有 API Key 时走本地启发式 fallback，保证 demo 可用
     if (!apiKey) {
-      sendJson(res, 200, { structured: heuristicExtract(text), source: "heuristic", ai_error: "API Key 未配置" });
+      sendJson(res, 200, buildFallbackResponse({
+        requestId,
+        startedAt,
+        text,
+        attempts: [],
+        fallbackReason: "missing_api_key",
+        providerStatus: "not_called",
+        parseStatus: "not_attempted",
+      }));
       return;
     }
 
     const prompt = buildPrompt(text);
-
-    // 依次尝试主模型和降级模型，任一成功即返回
-    const models = [TEXT_MODEL, FALLBACK_MODEL];
-    let lastError = "";
-    for (const model of models) {
-      const result = await callSiliconFlow(apiKey, model, prompt);
-      if (result.ok) {
-        try {
-          const structured = normalizeStructured(parsePossiblyFencedJson(result.content), text);
-          sendJson(res, 200, { structured, source: "ai", ai_model: model });
-          return;
-        } catch (parseErr) {
-          // 解析失败，记录错误并尝试下一个模型
-          lastError = `parse_error(${model}): ${safeErrorText(parseErr.message)}`;
-          continue;
-        }
-      }
-      // 记录失败原因，尝试下一个模型
-      lastError = result.error;
-    }
-
-    // 所有模型都失败，降级为启发式提取，并附带错误信息
-    sendJson(res, 200, {
-      structured: heuristicExtract(text),
-      source: "heuristic_fallback",
-      ai_error: lastError,
-    });
+    const result = await runModelCascade({ apiKey, prompt, originalText: text, requestId, startedAt });
+    sendJson(res, 200, result);
   } catch (error) {
     // 顶层异常兜底，避免未处理异常导致进程崩溃
     sendJson(res, 500, { error: "结构化提取失败", detail: safeErrorText(error.message) });
   }
 };
 
-// 调用 SiliconFlow API，返回 { ok, content, error }
-async function callSiliconFlow(apiKey, model, prompt) {
+async function runModelCascade({
+  apiKey,
+  prompt,
+  originalText,
+  requestId = crypto.randomUUID(),
+  startedAt = Date.now(),
+  fetchImpl = fetch,
+  totalBudgetMs = TOTAL_BUDGET_MS,
+  primaryTimeoutMs = PRIMARY_TIMEOUT_MS,
+  fallbackTimeoutMs = FALLBACK_TIMEOUT_MS,
+  models = [TEXT_MODEL, FALLBACK_MODEL],
+}) {
+  const attempts = [];
+  const uniqueModels = [...new Set(models.filter(Boolean))].slice(0, 2);
+  let fallbackReason = "model_unavailable";
+  let providerStatus = "not_called";
+  let parseStatus = "not_attempted";
+
+  for (let index = 0; index < uniqueModels.length; index += 1) {
+    const elapsed = Date.now() - startedAt;
+    const remaining = totalBudgetMs - elapsed;
+    if (remaining < 500) {
+      fallbackReason = "total_budget_exhausted";
+      providerStatus = "budget_exhausted";
+      break;
+    }
+    const configuredTimeout = index === 0 ? primaryTimeoutMs : fallbackTimeoutMs;
+    const timeoutMs = Math.max(500, Math.min(configuredTimeout, remaining));
+    const model = uniqueModels[index];
+    const call = await callSiliconFlow(apiKey, model, prompt, { fetchImpl, timeoutMs });
+    const attempt = {
+      sequence: index + 1,
+      model,
+      latency_ms: call.latencyMs,
+      outcome: call.ok ? "provider_success" : call.reason,
+      provider_status: call.providerStatus,
+      parse_status: "not_attempted",
+    };
+    attempts.push(attempt);
+    providerStatus = call.providerStatus;
+
+    if (call.ok) {
+      try {
+        const parsed = parsePossiblyFencedJson(call.content);
+        validateModelPayload(parsed);
+        const structured = normalizeStructured(parsed, originalText);
+        attempt.outcome = "ai_success";
+        attempt.parse_status = "success";
+        parseStatus = "success";
+        return {
+          structured,
+          request_id: requestId,
+          source: "ai",
+          model,
+          ai_model: model,
+          latency_ms: Date.now() - startedAt,
+          attempts,
+          fallback_reason: index > 0 ? fallbackReason : null,
+          provider_status: providerStatus,
+          parse_status: parseStatus,
+        };
+      } catch (error) {
+        attempt.outcome = "parse_error";
+        attempt.parse_status = "failed";
+        parseStatus = "failed";
+        fallbackReason = "parse_error";
+        if (index === 0 && uniqueModels.length > 1) continue;
+        break;
+      }
+    }
+
+    fallbackReason = call.reason;
+    parseStatus = "not_attempted";
+    if (!call.retryable || index > 0) break;
+  }
+
+  return buildFallbackResponse({
+    requestId,
+    startedAt,
+    text: originalText,
+    attempts,
+    fallbackReason,
+    providerStatus,
+    parseStatus,
+  });
+}
+
+function buildFallbackResponse({ requestId, startedAt, text, attempts, fallbackReason, providerStatus, parseStatus }) {
+  return {
+    structured: heuristicExtract(text),
+    request_id: requestId,
+    source: "heuristic_fallback",
+    model: null,
+    ai_model: null,
+    latency_ms: Date.now() - startedAt,
+    attempts,
+    fallback_reason: fallbackReason,
+    provider_status: providerStatus,
+    parse_status: parseStatus,
+  };
+}
+
+// Calls SiliconFlow without returning provider payloads, secrets, or user text.
+async function callSiliconFlow(apiKey, model, prompt, { fetchImpl = fetch, timeoutMs = 18000 } = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  const startedAt = Date.now();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(SILICON_FLOW_URL, {
+    const response = await fetchImpl(SILICON_FLOW_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -128,28 +221,64 @@ async function callSiliconFlow(apiKey, model, prompt) {
         temperature: 0.1,
         max_tokens: MAX_TOKENS,
         response_format: { type: "json_object" },
+        ...(model.includes("Qwen3") ? { enable_thinking: false } : {}),
       }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
     const raw = await response.text();
     if (!response.ok) {
-      return { ok: false, content: "", error: `http_${response.status}: ${safeErrorText(raw).slice(0, 200)}` };
+      const retryable = [408, 409, 425, 429].includes(response.status) || response.status >= 500;
+      return {
+        ok: false,
+        content: "",
+        reason: response.status === 429 ? "provider_rate_limited" : response.status >= 500 ? "provider_5xx" : `provider_http_${response.status}`,
+        providerStatus: response.status,
+        retryable,
+        latencyMs: Date.now() - startedAt,
+      };
     }
-    const payload = JSON.parse(raw);
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch (error) {
+      return { ok: false, content: "", reason: "provider_payload_parse_error", providerStatus: response.status, retryable: true, latencyMs: Date.now() - startedAt };
+    }
     const message = payload.choices?.[0]?.message || {};
-    // Qwen3 系列思考模式下 content 可能为空，实际结果在 reasoning_content 中
-    // 此时从 reasoning_content 中提取 JSON 片段作为回退
     let content = message.content || "";
     if (!content && message.reasoning_content) {
       const jsonMatch = message.reasoning_content.match(/\{[\s\S]*\}/);
       if (jsonMatch) content = jsonMatch[0];
     }
-    return { ok: true, content: content || "{}", error: "" };
+    if (!content) {
+      return { ok: false, content: "", reason: "empty_model_content", providerStatus: response.status, retryable: true, latencyMs: Date.now() - startedAt };
+    }
+    return { ok: true, content, reason: "", providerStatus: response.status, retryable: false, latencyMs: Date.now() - startedAt };
   } catch (error) {
     clearTimeout(timeout);
-    return { ok: false, content: "", error: `${error.name || "Unknown"}: ${safeErrorText(error.message)}` };
+    const timedOut = error?.name === "AbortError";
+    return {
+      ok: false,
+      content: "",
+      reason: timedOut ? "provider_timeout" : "provider_network_error",
+      providerStatus: timedOut ? "timeout" : "network_error",
+      retryable: true,
+      latencyMs: Date.now() - startedAt,
+    };
   }
+}
+
+function validateModelPayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("model payload must be an object");
+  const hasCoreEvidence = [value.title, value.item_name, value.type, value.category, value.location]
+    .some((item) => String(item || "").trim());
+  if (!hasCoreEvidence) throw new Error("model payload has no core evidence");
+}
+
+function clampInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 function buildPrompt(text) {
@@ -200,86 +329,77 @@ function buildPrompt(text) {
 
 function normalizeStructured(value, originalText) {
   const data = value && typeof value === "object" ? value : {};
-  const type = data.type === "found" ? "found" : "lost";
-
-  // 公共机构名称列表，用于识别机构联系方式
-  const institutionNames = [
-    "派出所", "地铁站", "地铁", "机场", "失物招领中心",
-    "服务中心", "物业", "值班室", "服务台", "游客中心",
-    "图书馆", "学校", "大学", "公安局", "警务站",
-  ];
-
-  let contact = String(data.contact || "").slice(0, 120);
-  // 如果 AI 返回的 contact 为空，但描述中包含公共机构关键词，尝试从描述中提取
-  if (!contact && originalText) {
-    const hasInstitution = institutionNames.some((name) => originalText.includes(name));
-    if (hasInstitution) {
-      // 尝试匹配 "机构名 + 电话/联系方式" 模式
-      const contactMatch = originalText.match(/(.*?(?:派出所|地铁站|地铁|机场|服务中心|物业|值班室|服务台|游客中心|图书馆|公安局)[^，。,.！？!?；;：:\s]{0,20})[，。,.\s]*(?:电话|联系方式|联系|热线)?[：:]?\s*(\d{3,4}-?\d{6,8}|1\d{10})/);
-      if (contactMatch) {
-        contact = `${contactMatch[1].trim()} ${contactMatch[2].trim()}`;
-      }
-    }
-  }
-
-  // 二次清理 title：确保没有颜色词、动作词残留
-  let title = cleanTitle(String(data.title || "").slice(0, 60));
-
-  // 分类兜底纠正：基于物品名称关键词重新判断
-  let category = pickEnum(data.category, CATEGORIES, "其他");
-  category = recategorizeByTitle(title, originalText, category);
-
-  // 地点结构化
-  const district = pickEnum(data.district, Object.keys(STREET_DATA), "");
-  const street = String(data.street || "").slice(0, 40);
-  const detailLocation = String(data.detail_location || "").slice(0, 60);
-
+  const evidence = buildEvidence(originalText);
+  const aiType = data.type === "found" ? "found" : data.type === "lost" ? "lost" : evidence.type.value;
+  const aiTitle = sanitizeTitle(String(data.title || ""));
+  const safeAiTitle = aiTitle && containsUsefulSourceToken(aiTitle, originalText) ? aiTitle : "";
+  const title = evidence.item.title !== "待确认物品" ? evidence.item.title : (safeAiTitle || "待确认物品");
+  const categoryCandidate = pickEnum(data.category, CATEGORIES, "其他");
+  const category = evidence.item.category !== "其他" ? evidence.item.category : recategorizeByTitle(title, originalText, categoryCandidate);
+  const sourceColor = COLORS.find((color) => originalText.includes(color)) || "";
+  const aiLocation = String(data.location || "").trim();
+  const location = evidence.location.value || (aiLocation && originalText.includes(aiLocation) ? aiLocation.slice(0, 60) : "");
+  const district = evidence.location.district || pickEnum(data.district, Object.keys(STREET_DATA), "");
+  const street = evidence.location.street || String(data.street || "").slice(0, 40);
+  const detailLocation = evidence.location.detail_location || String(data.detail_location || "").slice(0, 60);
+  const contactEvidence = extractReliableContact(originalText);
+  const features = evidence.features.values.length
+    ? evidence.features.values
+    : (Array.isArray(data.features) ? data.features.filter((item) => originalText.includes(String(item))).slice(0, 5) : []);
+  const fieldStatus = {
+    ...evidence.field_status,
+    type: evidence.type.status === "未识别" && (data.type === "lost" || data.type === "found") ? "待确认" : evidence.type.status,
+    title: title === "待确认物品" ? "待确认" : (evidence.item.status === "高置信" ? "高置信" : "待确认"),
+    category: category === "其他" ? "待确认" : (evidence.item.status === "高置信" ? "高置信" : "待确认"),
+    location: location ? (evidence.location.status || "待确认") : "未识别",
+    contact: contactEvidence.value ? "高置信" : "未识别",
+    features: features.length ? "高置信" : "未识别",
+  };
   return {
-    type,
+    type: aiType,
+    item_name: evidence.item.name,
     title,
     category,
-    color: pickEnum(data.color, COLORS, "黑色"),
-    location: String(data.location || "未知地点").slice(0, 60),
+    color: sourceColor,
+    location,
     district,
     street,
     detail_location: detailLocation,
-    time: normalizeTime(data.time),
-    contact,
-    description: String(data.description || originalText).slice(0, 600),
-    item_status: pickEnum(data.item_status, ITEM_STATUS, "unknown"),
+    time: evidence.time.value,
+    normalized_date: evidence.time.normalized_date,
+    raw_time_expression: evidence.time.raw_expression,
+    time_precision: evidence.time.precision,
+    time_period: evidence.time.period,
+    time_zone: evidence.time.time_zone,
+    time_needs_confirmation: evidence.time.needs_confirmation,
+    contact: contactEvidence.value,
+    contact_type: contactEvidence.type,
+    features,
+    feature_text: features.join("；"),
+    description: String(originalText || "").slice(0, 600),
+    item_status: evidence.item_status,
+    field_status: fieldStatus,
+    requires_confirmation: Object.values(fieldStatus).some((status) => status !== "高置信"),
     confidence: clampNumber(Number(data.confidence), 0, 1, 0.7),
   };
 }
 
 function cleanTitle(title) {
-  if (!title) return "";
-  // 去除颜色前缀（仅当颜色词后还有其他内容时）
-  const colorWords = [
-    "黑色", "白色", "红色", "蓝色", "绿色", "黄色", "紫色", "橙色", "粉色", "灰色", "棕色", "银色", "金色", "彩色", "透明", "米色", "青色",
-    "深蓝", "浅蓝", "深灰", "浅灰", "玫红", "藏青", "香槟", "咖啡", "墨绿", "天蓝", "宝蓝", "深蓝色", "浅蓝色", "深灰色", "浅灰色", "玫红色", "藏青色", "香槟色", "咖啡色", "墨绿色", "天蓝色", "宝蓝色",
-  ];
-  for (const cp of colorWords) {
-    if (title.startsWith(cp) && title.length > cp.length + 1) {
-      title = title.slice(cp.length);
-      break;
-    }
-  }
-  // 去除动作词和量词前缀（按长度降序，优先匹配更长的前缀）
-  const prefixes = [
-    "我的", "丢了", "捡到", "拾到", "捡了", "拾了", "发现", "看到一个", "看到一个", "掉了", "不见", "找到", "一个是",
-    "在", "一个", "個", "了", "和", "的", "是", "有", "个", "一",
-  ];
-  for (const prefix of prefixes) {
-    if (title.startsWith(prefix) && title.length > prefix.length + 1) {
-      title = title.slice(prefix.length);
-      break;
-    }
-  }
-  // 去除可能残留的"色"字开头
-  title = title.replace(/^[色]\s*/, "");
-  // 再去除可能残存的连接词
-  title = title.trim().replace(/^(?:的|是|有|个|了|和)\s*/, "").trim();
-  return title;
+  return sanitizeTitle(title);
+}
+
+function sanitizeTitle(title) {
+  return String(title || "")
+    .trim()
+    .replace(/^(?:我(?:的)?|在|于|丢了|丢失了|遗失了|捡到|拾到|发现了?|一个|一张|一本|一串)\s*/g, "")
+    .replace(/[，。,.！？!?；;：:].*$/, "")
+    .trim()
+    .slice(0, 40);
+}
+
+function containsUsefulSourceToken(title, source) {
+  const tokens = String(title || "").match(/[A-Za-z0-9]+|[\u4e00-\u9fa5]{2,}/g) || [];
+  return tokens.some((token) => String(source || "").toLowerCase().includes(token.toLowerCase()));
 }
 
 function pickEnum(value, allow, fallback) {
@@ -337,332 +457,295 @@ function parsePossiblyFencedJson(value) {
 
 // 本地启发式提取（API Key 缺失或失败时使用）
 // 时间解析：支持"昨天/今天/前天 + 上午/下午/晚上 + 具体时间"
-function parseTime(text) {
-  const now = new Date();
-  // 辅助：构造指定日期的 ISO 字符串（本地时区）
-  const toIso = (date, hour, minute) => {
-    const d = new Date(date);
-    d.setHours(hour, minute, 0, 0);
-    return d.toISOString().slice(0, 16);
+const DEFAULT_TIME_ZONE = process.env.LOST_FOUND_TIME_ZONE || "Asia/Shanghai";
+const FIELD_HIGH = "高置信";
+const FIELD_PENDING = "待确认";
+const FIELD_MISSING = "未识别";
+
+function zonedDateParts(date = new Date(), timeZone = DEFAULT_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+function shiftDateParts(parts, offsetDays) {
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + offsetDays));
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate() };
+}
+
+function formatDateParts(parts) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function parseChineseHour(token) {
+  if (/^\d{1,2}$/.test(token)) return Number(token);
+  const values = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
+  if (values[token]) return values[token];
+  const match = String(token || "").match(/^十([一二])$|^([一二])十$/);
+  if (match?.[1]) return 10 + values[match[1]];
+  if (match?.[2]) return values[match[2]] * 10;
+  return NaN;
+}
+
+function parseTimeEvidence(text, now = new Date()) {
+  const source = String(text || "");
+  const current = zonedDateParts(now);
+  let dateParts = null;
+  let hasExplicitDate = false;
+  const ranges = [];
+  const capture = (regex) => {
+    const match = regex.exec(source);
+    if (match) ranges.push({ start: match.index, end: match.index + match[0].length });
+    return match;
   };
 
-  // 日期基准判断
-  let baseDate = now;
-  const hasYesterday = /昨天|昨日/.test(text);
-  const hasToday = /今天|今日/.test(text);
-  const hasDayBefore = /前天|前日/.test(text);
+  const fullDate = capture(/(20\d{2})年(\d{1,2})月(\d{1,2})[日号]?/);
+  const monthDay = fullDate ? null : capture(/(\d{1,2})月(\d{1,2})[日号]?/);
+  const relative = capture(/今天|今日|昨天|昨日|昨晚|前天|前日/);
+  // “上周五”等表达受执行日期影响较大：保留原文，但不擅自归一为某一天。
+  const unsupportedRelative = relative ? null : capture(/(?:大概|大约|约)?上周[一二三四五六日天]/);
+  if (fullDate) {
+    dateParts = { year: Number(fullDate[1]), month: Number(fullDate[2]), day: Number(fullDate[3]) };
+    hasExplicitDate = true;
+  } else if (monthDay) {
+    dateParts = { year: current.year, month: Number(monthDay[1]), day: Number(monthDay[2]) };
+    const candidate = Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day);
+    const today = Date.UTC(current.year, current.month - 1, current.day);
+    if (candidate > today + 31 * 86400000) dateParts.year -= 1;
+    hasExplicitDate = true;
+  } else if (relative) {
+    const offset = /昨天|昨日|昨晚/.test(relative[0]) ? -1 : /前天|前日/.test(relative[0]) ? -2 : 0;
+    dateParts = shiftDateParts(current, offset);
+    hasExplicitDate = true;
+  }
 
-  if (hasYesterday) {
-    baseDate = new Date(now);
-    baseDate.setDate(baseDate.getDate() - 1);
-  } else if (hasDayBefore) {
-    baseDate = new Date(now);
-    baseDate.setDate(baseDate.getDate() - 2);
-  } else if (hasToday) {
-    baseDate = now;
+  const periodMatch = capture(/凌晨|早上|早晨|清晨|上午|中午|下午|傍晚|晚上|夜间|夜里/);
+  const period = /昨晚/.test(relative?.[0] || "") ? "晚上" : (periodMatch?.[0] || "");
+  const clock = capture(/(?:^|[^\d一二三四五六七八九十])(\d{1,2}|[一二三四五六七八九十]{1,3})(?:点|时|:|：)(半|\d{1,2})?(?:\s*(左右|前后))?(?!\d)/);
+  const approximateClock = Boolean(clock?.[3]);
+  let hour = null;
+  let minute = null;
+  if (clock) {
+    hour = parseChineseHour(clock[1]);
+    minute = clock[2] === "半" ? 30 : clock[2] ? Number(clock[2]) : 0;
+    if (/下午|傍晚|晚上|夜间|夜里/.test(period) && hour < 12) hour += 12;
+    if (/中午/.test(period) && hour < 11) hour += 12;
+    if (hour > 23 || minute > 59) { hour = null; minute = null; }
+  }
+
+  const rawExpression = ranges.length
+    ? source.slice(Math.min(...ranges.map((range) => range.start)), Math.max(...ranges.map((range) => range.end))).trim()
+    : "";
+  const normalizedDate = dateParts ? formatDateParts(dateParts) : "";
+  const inferredDate = !dateParts && hour !== null;
+  if (inferredDate) dateParts = current;
+  const value = hour !== null && dateParts && !approximateClock
+    ? formatDateParts(dateParts) + "T" + String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0")
+    : "";
+  const precision = approximateClock
+    ? "approximate"
+    : hour !== null
+      ? (inferredDate ? "exact_time_date_pending" : "exact")
+      : normalizedDate
+        ? (period ? "date_period" : "date")
+        : period || unsupportedRelative
+          ? "period"
+          : "none";
+  const status = hour !== null && hasExplicitDate && !approximateClock ? FIELD_HIGH : rawExpression ? FIELD_PENDING : FIELD_MISSING;
+  return {
+    value,
+    normalized_date: normalizedDate,
+    raw_expression: rawExpression,
+    precision,
+    period,
+    time_zone: DEFAULT_TIME_ZONE,
+    needs_confirmation: status !== FIELD_HIGH,
+    status,
+  };
+}
+
+function extractReliableContact(text) {
+  const source = String(text || "");
+  const email = source.match(/(?:邮箱|电子邮箱|email)?\s*[：:]?\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+  if (email) return { value: email[1], type: "email", status: FIELD_HIGH };
+  const labeledPhone = source.match(/(?:手机号|手机|联系电话|电话)\s*[：:]\s*((?:1[3-9]\d{9})|(?:0\d{2,3}-?\d{7,8}))(?!\d)/);
+  if (labeledPhone) return { value: labeledPhone[1], type: "phone", status: FIELD_HIGH };
+  const standalonePhone = source.match(/(?<!\d)(1[3-9]\d{9})(?!\d)/);
+  if (standalonePhone) return { value: standalonePhone[1], type: "phone", status: FIELD_HIGH };
+  const wechat = source.match(/(?:微信号|微信|wx)\s*[：:]\s*([A-Za-z][A-Za-z0-9_-]{5,19}|[\u4e00-\u9fa5A-Za-z0-9_-]{2,20})/i);
+  if (wechat) return { value: `微信：${wechat[1]}`, type: "wechat", status: FIELD_HIGH };
+  // 无冒号仅接受严格 ASCII 微信号，并标为待确认；“微信聊天”等普通短语不会命中。
+  const unlabeledWechat = source.match(/(?:^|[\s，,；;])(?:微信|wx)\s+([A-Za-z][A-Za-z0-9_-]{5,19})(?=$|[\s，。,.；;])/i);
+  if (unlabeledWechat) return { value: "微信：" + unlabeledWechat[1], type: "wechat", status: FIELD_PENDING };
+  const qq = source.match(/QQ\s*[：:]\s*([1-9]\d{4,11})/i);
+  if (qq) return { value: `QQ：${qq[1]}`, type: "qq", status: FIELD_HIGH };
+  return { value: "", type: "", status: FIELD_MISSING };
+}
+
+function extractLocationEvidence(text) {
+  const source = String(text || "");
+  const patterns = [
+    { regex: /最后一次看到(?:是)?在\s*(.+?)(?=(?:丢了|丢失|遗失|掉了|不见了|捡到|拾到|发现)|[，。,.！？!?；;]|$)/, status: FIELD_PENDING },
+    { regex: /地点(?:是|在|为)\s*(.+?)(?=[，。,.！？!?；;]|$)/, status: FIELD_HIGH },
+    { regex: /可能(?:落|掉|遗失)?在\s*(.+?)(?=[，。,.！？!?；;]|$)/, status: FIELD_PENDING },
+    { regex: /(?:在|于)\s*(.+?)(?=(?:丢了|丢失|遗失|掉了|不见了|落下(?:了)?|捡到|拾到|发现))/i, status: FIELD_HIGH },
+    // 地点位于句首且没有“在”：只取动作前的短语，随后再剥离时间前缀。
+    { regex: /^(?:我\s*)?(.+?)(?=(?:丢了|丢失|遗失|掉了|不见了|落下(?:了)?|捡到|拾到|发现))/, status: FIELD_HIGH },
+    { regex: /(?:丢在|落在|忘在|遗失在|捡于|拾于)\s*(.+?)(?=[，。,.！？!?；;]|$)/, status: FIELD_HIGH },
+  ];
+  let value = "";
+  let status = FIELD_MISSING;
+  for (const pattern of patterns) {
+    const match = source.match(pattern.regex);
+    if (match) { value = match[1]; status = pattern.status; break; }
+  }
+  value = String(value || "")
+    .replace(/^(?:(?:我\s*)?(?:大概|大约|约|可能)?\s*(?:(?:20\d{2}年)?\d{1,2}月\d{1,2}[日号]?|上周[一二三四五六日天]|今天|今日|昨日|昨天|昨晚|前天|前日)?\s*(?:凌晨|早上|早晨|清晨|上午|中午|下午|傍晚|晚上|夜间|夜里)?\s*(?:(?:\d{1,2}|[一二三四五六七八九十]{1,3})(?:点|时)(?:半|\d{1,2})?(?:左右|前后)?)?\s*(?:在|于)?\s*)/, "")
+    .replace(/(?:把|将)\s*.*$/, "")
+    .replace(/(?:丢了一个|丢了|捡到一个|捡到|拾到|遗失|落下).*$/, "")
+    .replace(/(?:手机号|电话|微信号?|邮箱|QQ)\s*[：:].*$/i, "")
+    .replace(/[，。,.！？!?；;：:]$/, "")
+    .trim()
+    .slice(0, 60);
+  if (!value) status = FIELD_MISSING;
+  if (/可能|或|附近|左右/.test(source) && value) status = FIELD_PENDING;
+  let district = "";
+  let street = "";
+  const districtMatch = value.match(/(东城区|西城区|朝阳区|丰台区|石景山区|海淀区|门头沟区|房山区|通州区|顺义区|昌平区|大兴区|怀柔区|平谷区|密云区|延庆区)/);
+  if (districtMatch) {
+    district = districtMatch[1];
+    street = (STREET_DATA[district] || []).find((candidate) => value.includes(candidate)) || "";
   } else {
-    // 尝试匹配 "YYYY年M月D日" 完整日期格式
-    const fullDateMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})[日号]/);
-    if (fullDateMatch) {
-      const year = parseInt(fullDateMatch[1], 10);
-      const month = parseInt(fullDateMatch[2], 10);
-      const day = parseInt(fullDateMatch[3], 10);
-      baseDate = new Date(year, month - 1, day);
-    } else {
-      // 尝试匹配 "X月X日" 格式
-      const dateMatch = text.match(/(\d{1,2})月(\d{1,2})[日号]/);
-      if (dateMatch) {
-        const month = parseInt(dateMatch[1], 10);
-        const day = parseInt(dateMatch[2], 10);
-        const year = now.getFullYear();
-        const parsed = new Date(year, month - 1, day);
-        // 如果解析的日期在未来，则认为是去年
-        if (parsed > now) parsed.setFullYear(year - 1);
-        baseDate = parsed;
-      } else {
-        // 无明确日期，先检查"X点半"（避免被 timeMatch 误匹配为整点）
-        const halfMatch = text.match(/(\d{1,2})点半/);
-        if (halfMatch) {
-          let hour = parseInt(halfMatch[1], 10);
-          if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
-          return toIso(now, hour, 30);
-        }
-        // 再尝试匹配具体时间，无则返回当前时间
-        const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-        if (timeMatch) {
-          let hour = parseInt(timeMatch[1], 10);
-          const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-          // 下午/晚上 + 数字 ≤ 6 → +12
-          if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
-          return toIso(now, hour, minute);
-        }
-        // 无时间信息，返回当前时间
-        return now.toISOString().slice(0, 16);
-      }
+    for (const [candidateDistrict, candidates] of Object.entries(STREET_DATA)) {
+      const candidateStreet = candidates.find((candidate) => value.includes(candidate));
+      if (candidateStreet) { district = candidateDistrict; street = candidateStreet; break; }
     }
   }
+  return { value, status, district, street, detail_location: value };
+}
 
-  // 统一处理"X点半"格式（半 = 30分），避免在各个时段分支中重复匹配
-  const halfMatch = text.match(/(\d{1,2})点半/);
-  if (halfMatch) {
-    let hour = parseInt(halfMatch[1], 10);
-    if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
-    return toIso(baseDate, hour, 30);
-  }
+const ITEM_RULES = [
+  { regex: /AirPods\s*Pro/i, name: "AirPods Pro", category: "电子设备" },
+  { regex: /AirPods|苹果耳机/i, name: "AirPods", category: "电子设备" },
+  { regex: /(?:蓝牙|无线)?耳机(?:盒|充电盒)?/, name: "耳机", category: "电子设备" },
+  { regex: /校园卡套/, name: "校园卡套", category: "证件" },
+  { regex: /校园卡|学生卡|门禁卡/, name: "校园卡", category: "证件" },
+  { regex: /身份证/, name: "身份证", category: "证件" },
+  { regex: /学生证|驾驶证|护照|银行卡|社保卡/, name: "证件", category: "证件" },
+  { regex: /(?:苹果|华为|小米|OPPO|VIVO|三星)?手机/i, name: "手机", category: "电子设备" },
+  { regex: /(?:笔记本|MacBook|电脑)/i, name: "笔记本电脑", category: "电子设备" },
+  { regex: /(?:iPad|平板电脑|平板)/i, name: "平板电脑", category: "电子设备" },
+  { regex: /充电宝/i, name: "充电宝", category: "电子设备" },
+  { regex: /充电器|数据线|U盘/i, name: "电子配件", category: "电子设备" },
+  { regex: /钥匙(?:串|扣)?/, name: "钥匙", category: "钥匙" },
+  { regex: /双肩包|背包|书包|钱包|手提包|行李箱|挎包/, name: "箱包", category: "箱包" },
+  { regex: /雨伞|伞/, name: "雨伞", category: "生活用品" },
+  { regex: /水杯|保温杯|杯子/, name: "水杯", category: "生活用品" },
+  { regex: /口红|围巾|帽子|手套/, name: "生活用品", category: "生活用品" },
+  { regex: /课本|教材|书|笔记本|文具|计算器/, name: "学习用品", category: "学习用品" },
+  { regex: /手表|项链|戒指|手镯|耳环|首饰/, name: "贵重物品", category: "贵重物品" },
+];
 
-  // 时段判断
-  if (/早上|早晨|清晨|上午/.test(text)) {
-    // 上午：匹配具体小时，无则默认 8 点
-    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-      if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
-      return toIso(baseDate, hour, minute);
-    }
-    return toIso(baseDate, 8, 0);
-  }
-  if (/中午/.test(text)) {
-    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-      if (hour <= 12) hour += 12;
-      return toIso(baseDate, hour, minute);
-    }
-    return toIso(baseDate, 12, 0);
-  }
-  if (/下午|傍晚/.test(text)) {
-    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-      if (hour <= 12) hour += 12;
-      return toIso(baseDate, hour, minute);
-    }
-    return toIso(baseDate, 15, 0);
-  }
-  if (/晚上|夜间|夜里/.test(text)) {
-    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-      if (hour <= 12) hour += 12;
-      return toIso(baseDate, hour, minute);
-    }
-    return toIso(baseDate, 20, 0);
-  }
+function extractItemEvidence(text) {
+  const source = String(text || "");
+  const rule = ITEM_RULES.find((item) => item.regex.test(source));
+  const compactColorMap = { "黑": "黑色", "白": "白色", "蓝": "蓝色", "红": "红色", "黄": "黄色", "绿": "绿色", "银": "银色", "灰": "灰色", "粉": "粉色" };
+  const compactColor = source.match(/([黑白蓝红黄绿银灰粉])(?=(?:雨?伞|杯子|水杯|保温杯|耳机|双肩包|背包|书包|充电宝|手机|钥匙))/);
+  const color = COLORS.find((candidate) => source.includes(candidate)) || (compactColor ? compactColorMap[compactColor[1]] : "");
+  if (!rule) return { name: "", title: "待确认物品", category: "其他", color, status: FIELD_MISSING };
+  let name = rule.name;
+  if (name === "耳机" && /索尼|Sony/i.test(source)) name = "索尼耳机";
+  if (/AirPods\s*Pro/i.test(source) && /充电盒|耳机盒/.test(source)) name = "AirPods Pro 充电盒";
+  else if (/AirPods/i.test(source) && /充电盒|耳机盒/.test(source)) name = "AirPods 充电盒";
+  else if (name === "耳机" && /充电盒|耳机盒/.test(source)) name = "耳机充电盒";
+  const title = [color, name].filter(Boolean).join(" ");
+  return { name, title, category: rule.category, color, status: FIELD_HIGH };
+}
 
-  // 有日期但无时段，尝试匹配具体时间
-  const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})/);
-  if (timeMatch) {
-    let hour = parseInt(timeMatch[1], 10);
-    const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-    if (/下午|傍晚|晚上|夜间/.test(text) && hour <= 12) hour += 12;
-    return toIso(baseDate, hour, minute);
-  }
+function extractFeatures(text) {
+  const clauses = String(text || "").split(/[，。,.；;！？!?]/).map((part) => part.trim()).filter(Boolean);
+  const values = clauses.filter((clause) => /划痕|磨损|缺口|破损|贴纸|挂件|花纹|图案|字样|编号|里面有|内有|装有|外壳|保护壳|钥匙扣|表带/.test(clause)).slice(0, 5);
+  return { values, status: values.length ? FIELD_HIGH : FIELD_MISSING };
+}
 
-  // 有日期但无具体时间，默认中午 12 点
-  return toIso(baseDate, 12, 0);
+function extractType(text) {
+  const lost = /丢了|丢失|遗失|掉了|找不到|不见了|落下/.test(text);
+  const found = /捡到|拾到|捡了|拾了|发现(?:了)?|看到一个/.test(text);
+  if (lost && !found) return { value: "lost", status: FIELD_HIGH };
+  if (found && !lost) return { value: "found", status: FIELD_HIGH };
+  return { value: "lost", status: lost || found ? FIELD_PENDING : FIELD_MISSING };
+}
+
+function extractItemStatus(text) {
+  if (/已交|交给|送到|交至|送至|交到/.test(text)) return "institution";
+  if (/代为保管|拿着|带走|收着|保管/.test(text)) return "custody";
+  if (/仍在原地|还在原地|还在那里|没动|放在原地/.test(text)) return "in_place";
+  return "unknown";
+}
+
+function buildEvidence(text) {
+  const type = extractType(text);
+  const item = extractItemEvidence(text);
+  const location = extractLocationEvidence(text);
+  const time = parseTimeEvidence(text);
+  const contact = extractReliableContact(text);
+  const features = extractFeatures(text);
+  const fieldStatus = {
+    type: type.status,
+    item: item.status,
+    title: item.status === FIELD_HIGH ? FIELD_HIGH : FIELD_PENDING,
+    category: item.category === "其他" ? FIELD_PENDING : FIELD_HIGH,
+    color: item.color ? FIELD_HIGH : FIELD_MISSING,
+    location: location.status,
+    time: time.status,
+    contact: contact.status,
+    features: features.status,
+  };
+  return { type, item, location, time, contact, features, item_status: extractItemStatus(text), field_status: fieldStatus };
 }
 
 function heuristicExtract(text) {
-  const lower = text;
-  // 判断 lost/found：捡到/拾到 关键词出现则 found，否则 lost
-  const type = /捡到|拾到|捡了|拾了|发现|看到一个/.test(lower) && !/丢|遗失|掉了|找不到|不见了/.test(lower)
-    ? "found"
-    : "lost";
-
-  // 颜色匹配
-  const color = COLORS.find((c) => lower.includes(c)) || "黑色";
-
-  // 类别匹配（关键词字典）
-  const categoryMap = {
-    证件: ["身份证", "学生证", "校园卡", "驾驶证", "卡套", "证件"],
-    电子设备: ["手机", "耳机", "笔记本", "电脑", "iPad", "ipad", "充电", "数据线", "蓝牙", "平板"],
-    钥匙: ["钥匙"],
-    箱包: ["背包", "双肩包", "手提包", "钱包", "书包", "行李", "挎包"],
-    生活用品: ["伞", "水杯", "保温杯", "口红", "化妆", "镜子", "梳子"],
-    学习用品: ["书", "课本", "笔", "本子", "文具", "教材", "资料"],
-    贵重物品: ["手表", "项链", "戒指", "首饰", "手镯", "耳环"],
-  };
-  let category = "其他";
-  for (const [key, keywords] of Object.entries(categoryMap)) {
-    if (keywords.some((k) => lower.includes(k))) {
-      category = key;
-      break;
-    }
-  }
-
-  // 地点：匹配"在 XX"、"丢在 XX"、"捡到 XX"模式，去除动作词前缀
-  let location = "未知地点";
-  const locPatterns = [
-    /(?:在|丢在|落在|忘在|遗在|捡到|拾到|捡于|拾于|发现于|位于)\s*([^，。,.！？!?；;：:\s]{2,25}?)(?:[，。,.！？!?；;：:\s]|$)/,
-    /([^，。,.！？!?；;：:\s]{2,25}?)(?:附近|旁边|门口|里面|外面|楼上|楼下)/,
-  ];
-  for (const pattern of locPatterns) {
-    const match = lower.match(pattern);
-    if (match) {
-      location = match[1];
-      break;
-    }
-  }
-  // 过滤掉地点中可能包含的物品词
-  const itemWords = ["手机", "耳机", "电脑", "笔记本", "iPad", "平板", "卡套", "钥匙", "背包", "钱包", "书包", "行李", "挎包", "水杯", "保温杯", "口红", "课本", "本子", "手表", "项链", "戒指", "首饰", "手镯", "耳环", "化妆", "镜子", "梳子", "证件", "书", "笔", "伞", "充电器", "数据线", "蓝牙耳机", "苹果手机", "一加耳机"];
-  for (const word of itemWords) {
-    if (location.includes(word)) {
-      const idx = location.indexOf(word);
-      if (idx === 0) {
-        location = location.slice(word.length);
-      } else if (idx + word.length === location.length) {
-        location = location.slice(0, idx);
-      }
-    }
-  }
-  location = location.replace(/^(?:的|是|有|个|一|了|和|在|捡到|拾到|捡了|拾了|发现|看到一个|丢了|掉了|不见|找到)\s*/, "").trim();
-  if (!location) location = "未知地点";
-
-  // 结构化地点解析
-  let district = "";
-  let street = "";
-  let detailLocation = "";
-  const districtMatch = location.match(/(东城区|西城区|朝阳区|丰台区|石景山区|海淀区|门头沟区|房山区|通州区|顺义区|昌平区|大兴区|怀柔区|平谷区|密云区|延庆区)/);
-  if (districtMatch) {
-    district = districtMatch[1];
-    const possibleStreets = STREET_DATA[district] || [];
-    for (const s of possibleStreets) {
-      if (location.includes(s)) {
-        street = s;
-        break;
-      }
-    }
-  }
-  detailLocation = location.replace(district, "").replace(street, "").replace(/^[\s·-]+/, "").slice(0, 60);
-
-  // 时间：使用 parseTime 解析"昨天下午3点"等表达，无时间信息时返回当前时间
-  const parsedTime = parseTime(text);
-
-  // 标题提取：精准提取物品名称
-  let title = "";
-
-  // 标题提取策略：
-  // 使用 indexOf 精确查找关键词位置，避免正则贪婪匹配到地点中的字
-  // 优先匹配更长的关键词，选择最靠后的匹配（通常在"一个/捡到/丢了"之后）
-
-  // 标题提取策略：按关键词长度降序排列，确保优先匹配更长的复合词
-  // 例如"校园卡套"优先于"校园卡"，"蓝牙耳机"优先于"耳机"
-  const itemKeywords = [
-    "校园卡套", "身份证", "学生证", "驾驶证", "双肩包", "手提包", "数据线", "充电器",
-    "蓝牙耳机", "苹果手机", "一加耳机", "三星手机", "华为手机", "小米手机", "OPPO手机", "VIVO手机",
-    "平板电脑", "笔记本电脑", "苹果电脑", "MAC电脑", "iPad", "平板", "卡套", "钥匙",
-    "双肩包", "背包", "钱包", "书包", "行李箱", "挎包", "水杯", "保温杯", "口红",
-    "课本", "本子", "手表", "项链", "戒指", "首饰", "手镯", "耳环", "化妆", "镜子", "梳子",
-    "校园卡", "证件", "耳机", "手机", "电脑", "笔记本", "书", "笔", "伞",
-  ];
-
-  // 收集所有关键词匹配位置
-  const matches = [];
-  for (const keyword of itemKeywords) {
-    const idx = lower.indexOf(keyword);
-    if (idx !== -1) {
-      // 提取关键词前面的修饰词（最多3个汉字）
-      const before = text.slice(Math.max(0, idx - 3), idx);
-      // 过滤掉地点词、动作词、量词、颜色词作为修饰词
-      const cleanPrefix = before.replace(/^(?:在|到|了|和|的|是|有|个|一|了|黑色|白色|红色|蓝色|绿色|黄色|紫色|橙色|粉色|灰色|棕色|银色|金色|彩色|透明|米色|青色|深蓝|浅蓝|深灰|浅灰|玫红|藏青|香槟|咖啡|墨绿|天蓝|宝蓝)\s*/, "");
-      matches.push({
-        keyword,
-        idx,
-        prefix: cleanPrefix,
-        full: cleanPrefix + keyword,
-      });
-    }
-  }
-
-  // 排序：优先选择更长的关键词，相同长度选更靠后的（更接近物品描述部分）
-  matches.sort((a, b) => {
-    if (b.keyword.length !== a.keyword.length) return b.keyword.length - a.keyword.length;
-    return b.idx - a.idx;
-  });
-
-  if (matches.length > 0) {
-    const best = matches[0];
-    title = best.full;
-  }
-
-  // 清理标题：去除常见前缀（动作词、量词）
-  title = title.replace(/^(?:丢了|捡到|拾到|捡了|拾了|发现|看到一个|掉了|不见|找到|在|一个|個|了|和|的)\s*/, "");
-
-  // 去除颜色词前缀（仅当颜色词后还有其他内容时）
-  const colorPrefixes = ["黑色", "白色", "红色", "蓝色", "绿色", "黄色", "紫色", "橙色", "粉色", "灰色", "棕色", "银色", "金色", "彩色", "透明", "米色", "青色", "深蓝色", "浅蓝色", "深灰色", "浅灰色", "玫红色", "藏青色", "香槟色", "咖啡色", "墨绿色", "天蓝色", "宝蓝色"];
-  for (const cp of colorPrefixes) {
-    if (title.startsWith(cp) && title.length > cp.length) {
-      title = title.slice(cp.length);
-      break;
-    }
-  }
-
-  // 去除可能残留的"色"字
-  title = title.replace(/^[色]\s*/, "");
-
-  // 去除首尾空白和常见连接词（注意：不要去掉合法的一/二/三数字前缀）
-  title = title.trim().replace(/^(?:的|是|有|个|了|和)\s*/, "").trim();
-
-  // 兜底：如果 title 为空或仍包含整句话，取 text 前 15 字
-  if (!title || title.length > 20) {
-    title = text.replace(/^(?:在|丢在|落在|忘在|遗在|捡到|拾到|捡于|拾于|发现于|位于|我的|昨天|今天|上周|上周|最近|刚才)\s*/, "").slice(0, 15);
-  }
-
-  // 公共机构联系方式提取
-  const institutionNames = ["派出所", "地铁站", "地铁", "机场", "失物招领中心", "服务中心", "物业", "值班室", "服务台", "游客中心", "图书馆", "学校", "大学", "公安局", "警务站"];
-  let contact = "";
-  const hasInstitution = institutionNames.some((name) => lower.includes(name));
-  if (hasInstitution) {
-    // 策略1：匹配 "XX机构 + 电话 + 号码"
-    const contactMatch = text.match(/(?:在|给|交给|送到|送至|交至|交到|已送至|已交至|已送到|已交给)?[^\u4e00-\u9fa5]?([\u4e00-\u9fa5]{1,10}(?:派出所|地铁站|机场|服务中心|物业|值班室|服务台|游客中心|图书馆|公安局))[^\u4e00-\u9fa5]{0,5}[，。,.\s]*(?:电话|联系方式|联系|热线)?[：:]?\s*(\d{3,4}-?\d{6,8}|1\d{10})?/);
-    if (contactMatch) {
-      contact = contactMatch[1].trim();
-      if (contactMatch[2]) contact += " " + contactMatch[2].trim();
-    } else {
-      // 策略2：直接匹配机构名（前面允许有动作词分隔）
-      const instMatch = text.match(/(?:在|给|交给|送到|送至|交至|交到|已送至|已交至|已送到|已交给)?[^\u4e00-\u9fa5]?([\u4e00-\u9fa5]{1,10}(?:派出所|地铁站|机场|服务中心|物业|值班室|服务台|游客中心|图书馆|公安局))/);
-      if (instMatch) contact = instMatch[1].trim();
-    }
-  }
-
-  // 严格清理联系方式中的动词前缀（按长度降序，优先匹配更长的前缀）
-  const verbPrefixes = ["已联系", "已交给", "已通知", "已告知", "已转交", "已送至", "已交至", "已送到", "已交给", "联系", "交给", "通知", "告知", "转交", "送到", "送至", "交至", "交到", "给"];
-  for (const prefix of verbPrefixes) {
-    if (contact.startsWith(prefix)) {
-      contact = contact.slice(prefix.length).trim();
-      break;
-    }
-  }
-
-  // 如果没有机构，尝试提取手机号
-  if (!contact) {
-    const phoneMatch = text.match(/1\d{10}/);
-    if (phoneMatch) contact = phoneMatch[0];
-  }
-
-  // 物品状态判断
-  let item_status = "unknown";
-  if (/已交|交给|送到|交至|送至|交到/.test(lower)) item_status = "institution";
-  else if (/代为保管|拿着|带走|收着|保管/.test(lower)) item_status = "custody";
-  else if (/仍在原地|还在原地|还在那里|没动|放在原地/.test(lower)) item_status = "in_place";
-
+  const source = String(text || "").trim();
+  const evidence = buildEvidence(source);
   return {
-    type,
-    title,
-    category,
-    color,
-    location,
-    district,
-    street,
-    detail_location: detailLocation,
-    time: parsedTime,
-    contact,
-    description: text.slice(0, 600),
-    item_status,
-    confidence: 0.4,
+    type: evidence.type.value,
+    item_name: evidence.item.name,
+    title: evidence.item.title,
+    category: evidence.item.category,
+    color: evidence.item.color,
+    location: evidence.location.value,
+    district: evidence.location.district,
+    street: evidence.location.street,
+    detail_location: evidence.location.detail_location,
+    time: evidence.time.value,
+    normalized_date: evidence.time.normalized_date,
+    raw_time_expression: evidence.time.raw_expression,
+    time_precision: evidence.time.precision,
+    time_period: evidence.time.period,
+    time_zone: evidence.time.time_zone,
+    time_needs_confirmation: evidence.time.needs_confirmation,
+    contact: evidence.contact.value,
+    contact_type: evidence.contact.type,
+    features: evidence.features.values,
+    feature_text: evidence.features.values.join("；"),
+    description: source.slice(0, 600),
+    item_status: evidence.item_status,
+    field_status: evidence.field_status,
+    requires_confirmation: Object.values(evidence.field_status).some((status) => status !== FIELD_HIGH),
+    confidence: evidence.item.status === FIELD_HIGH && evidence.location.status !== FIELD_MISSING ? 0.68 : 0.42,
   };
 }
+
+module.exports.heuristicExtract = heuristicExtract;
+module.exports.parseTimeEvidence = parseTimeEvidence;
+module.exports.extractReliableContact = extractReliableContact;
+module.exports.extractLocationEvidence = extractLocationEvidence;
+module.exports.runModelCascade = runModelCascade;
+module.exports.callSiliconFlow = callSiliconFlow;
+module.exports.validateModelPayload = validateModelPayload;
+module.exports.buildPrompt = buildPrompt;
