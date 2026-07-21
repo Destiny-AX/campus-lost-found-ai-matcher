@@ -2,7 +2,7 @@
 
 // 完全离线的 Supabase Auth 契约测试：不访问网络，不写入真实数据库。
 process.env.LOST_FOUND_SUPABASE_URL = "https://auth-contract.invalid";
-process.env.LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY = "contract-service-key";
+process.env.LOST_FOUND_SUPABASE_SERVICE_ROLE_KEY = "sb_secret_contract-server-key";
 process.env.LOST_FOUND_SUPABASE_ANON_KEY = "contract-anon-key";
 process.env.LOST_FOUND_JWT_SECRET = "contract-test-jwt-secret-at-least-32-bytes";
 
@@ -159,19 +159,37 @@ async function main() {
   assert.ok(providerCalls.length >= 4);
   assert.ok(providerCalls.every((call) => call.headers.apikey === "contract-anon-key"));
   pass("Auth 请求优先使用服务端 anon key", `calls=${providerCalls.length}`);
+  assert.ok(providerCalls.every((call) => !call.headers.Authorization));
+  pass("新式 opaque Auth Key 不会被错误作为 Bearer JWT");
+
+  delete process.env.LOST_FOUND_SUPABASE_ANON_KEY;
+  const fallbackLogin = await invoke("password-login", {
+    email: "server-fallback@example.com",
+    password: "server-fallback-safe-42",
+  }, "auth-test-server-fallback");
+  assert.equal(fallbackLogin.status, 200);
+  const fallbackProviderCall = calls.filter((call) => call.url.startsWith("/auth/v1/")).at(-1);
+  assert.equal(fallbackProviderCall.headers.apikey, "sb_secret_contract-server-key");
+  assert.ok(!fallbackProviderCall.headers.Authorization);
+  process.env.LOST_FOUND_SUPABASE_ANON_KEY = "contract-anon-key";
+  pass("仅配置 sb_secret 时作为 apikey 调用且不伪造 Bearer JWT");
 
   const root = path.resolve(__dirname, "..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.ok(html.includes('name="email"') && html.includes('name="password"'));
   assert.ok(html.includes("拾寻账号") && !html.includes("微信登录（Mock）") && !html.includes("游客登录"));
+  assert.ok(html.includes("身份信息登记") && !html.includes('data-view-target="stats"') && !html.includes('id="view-stats"'));
+  assert.ok(!html.includes("分数是演示排序分"));
+  assert.ok(fs.existsSync(path.join(root, "docs", "evaluation", "evaluation-report.md")));
   pass("用户界面提供拾寻邮箱密码入口且移除微信/游客演示入口");
 
   const browserScript = fs.readFileSync(path.join(root, "script.js"), "utf8");
   assert.ok(browserScript.includes("password-${action}") && browserScript.includes("handlePasswordRegister") && browserScript.includes("handlePasswordLogin"));
   assert.ok(!browserScript.includes("autoLoginDemo") && !browserScript.includes("wechat-login"));
+  assert.ok(!browserScript.includes("🔥 高排序候选"));
   pass("浏览器不再自动创建演示身份并调用新的账密接口");
 
-  console.log("Supabase Auth 契约测试通过：9/9");
+  console.log("Supabase Auth 契约测试通过：12/12");
 }
 
 main().catch((error) => {

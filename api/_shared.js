@@ -46,14 +46,15 @@ function getSupabaseConfig() {
   return { url, key };
 }
 
-// Supabase Auth 仅在服务端调用。优先使用 anon/publishable key；为兼容既有
-// Vercel 配置，可暂时回退到服务端数据库 key，但绝不把任何 key 返回浏览器。
+// Supabase Auth 仅在服务端调用。优先使用 anon/publishable key；没有单独配置时
+// 可使用服务端 key 作为 apikey，但新式 sb_* key 绝不能伪装成 Bearer JWT。
 function getSupabaseAuthConfig() {
   const config = getSupabaseConfig();
   if (!config?.url) return null;
   const clean = (str) => (str || "").replace(/^\uFEFF/, "").trim();
   const authKey = clean(
     readEnv("LOST_FOUND_SUPABASE_ANON_KEY") ||
+    readEnv("LOST_FOUND_SUPABASE_PUBLISHABLE_KEY") ||
     readEnv("SUPABASE_ANON_KEY") ||
     readEnv("supabase_anon_key") ||
     readEnv("SUPABASE_PUBLISHABLE_KEY") ||
@@ -62,7 +63,7 @@ function getSupabaseAuthConfig() {
   return {
     url: config.url,
     key: authKey || config.key,
-    keySource: authKey ? "anon" : "server_fallback",
+    keySource: authKey ? "publishable_or_anon" : "server_fallback",
   };
 }
 

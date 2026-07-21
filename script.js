@@ -23,6 +23,7 @@ const LEVEL_TITLES = {
 const BADGE_RARITY = {
   "🌱 新手上路": "common",
   "✅ 实名认证": "rare",
+  "✅ 身份信息登记": "rare",
   "📝 初次发布": "common",
   "🎯 匹配达人": "rare",
   "🤝 助人为乐": "epic",
@@ -466,7 +467,7 @@ function openUserDialog() {
 
   if (avatar) avatar.textContent = (currentUser.nickname || "?")[0];
   if (nickname) nickname.textContent = currentUser.nickname || "无名氏";
-  if (status) status.textContent = currentUser.verified ? "✅ 已实名认证" : "⚠️ 未实名认证";
+  if (status) status.textContent = currentUser.verified ? "✅ 已完成身份信息登记" : "⚠️ 未完成身份信息登记";
   if (verifyBtn) verifyBtn.style.display = currentUser.verified ? "none" : "block";
   if (info) {
     info.innerHTML = `
@@ -597,7 +598,7 @@ async function handleVerifyIdentity(event) {
     els.verifyDialog.close();
     // 清除记录缓存：认证前缓存的模糊记录需要失效，刷新后重新请求非模糊数据
     clearRecordsCache();
-    showToast("实名认证成功！现在可以查看完整信息。", "success");
+    showToast("身份信息登记完成，现在可以查看完整信息。", "success");
     setTimeout(() => window.location.reload(), 300);
   } catch (e) {
     const msg = e.name === "AbortError" ? "请求超时，请重试" : "网络错误";
@@ -1223,7 +1224,7 @@ async function renderMatchView() {
       if (currentUser?.verified) {
         showToast("招领信息需认领审核通过后解锁联系方式", "info");
       } else {
-        showToast("请先完成模拟实名，再提交认领申请", "info");
+        showToast("请先完成身份信息登记，再提交认领申请", "info");
         setTimeout(() => els.verifyDialog.showModal(), 500);
       }
     });
@@ -1236,7 +1237,7 @@ function showMatchContact(record) {
     return;
   }
   if (!currentUser.verified) {
-    showToast("请先完成实名认证以查看联系方式", "info");
+    showToast("请先完成身份信息登记以查看联系方式", "info");
     setTimeout(() => els.verifyDialog.showModal(), 500);
     return;
   }
@@ -1270,7 +1271,7 @@ function renderMatchItem(record, result) {
     ? `<button class="ghost-button" data-contact-id="${record.id}" type="button">联系对方</button>`
     : currentUser?.verified
       ? `<button class="ghost-button contact-disabled-btn" type="button" aria-disabled="true">认领通过后解锁</button>`
-      : `<button class="ghost-button contact-disabled-btn" type="button" aria-disabled="true">模拟实名后申请</button>`;
+      : `<button class="ghost-button contact-disabled-btn" type="button" aria-disabled="true">登记身份信息后申请</button>`;
   return `<article class="match-item">
     <div class="match-item-media">
       ${renderRecordImage(record)}
@@ -1285,7 +1286,7 @@ function renderMatchItem(record, result) {
     <div class="match-item-body">
       <div class="meta-line">
         <span class="status-badge ${record.type}">${record.type === "lost" ? "寻物" : "招领"}</span>
-        ${score >= 80 && result.coverage >= 65 ? '<span class="match-recommend">🔥 高排序候选</span>' : ""}
+        ${score >= 80 && result.coverage >= 65 ? '<span class="match-recommend">高排序候选</span>' : ""}
       </div>
       <h4>${escapeHtml(record.title)}</h4>
       <div class="evidence-coverage">证据覆盖：<strong>${Math.round(result.coverage)}%</strong> · ${result.missingDimensions.length ? `缺失 ${result.missingDimensions.map((key) => DIMENSION_LABELS[key]).join("、")}` : "字段完整"}</div>
@@ -1500,7 +1501,7 @@ function openDetail(id) {
   const verifyPrompt = fuzzy
     ? currentUser?.verified
       ? `<div class="fuzzy-notice">🔒 招领信息需提交认领申请，并由发布者审核通过后解锁完整信息。</div>`
-      : `<div class="fuzzy-notice">🔒 部分信息已模糊化处理，<button class="text-button verify-trigger" type="button">完成模拟实名</button>后可申请认领。</div>`
+      : `<div class="fuzzy-notice">🔒 部分信息已模糊化处理，<button class="text-button verify-trigger" type="button">完成身份信息登记</button>后可申请认领。</div>`
     : "";
 
   let contactDisplay;
@@ -1536,7 +1537,7 @@ function openDetail(id) {
   if (!currentUser) {
     claimSection = `<div class="claim-section"><div class="claim-hint">登录后可申请认领或查看归还进度</div></div>`;
   } else if (!isOwn && record.type === "found" && record.status === "待认领" && !currentUser.verified) {
-    claimSection = `<div class="claim-section"><div class="claim-hint">请先完成模拟实名，再提交认领申请</div><button class="primary-action verify-trigger" type="button">完成模拟实名</button></div>`;
+    claimSection = `<div class="claim-section"><div class="claim-hint">请先完成身份信息登记，再提交认领申请</div><button class="primary-action verify-trigger" type="button">完成身份信息登记</button></div>`;
   } else if (!isOwn && record.type === "found" && record.status === "待认领") {
     const hasQuestion = !!record.claim_question;
     const questionHtml = hasQuestion
@@ -1697,7 +1698,7 @@ function showContactPrompt() {
     showToast("招领信息需认领审核通过后解锁联系方式", "info");
     return;
   }
-  showToast("请先完成模拟实名，再提交认领申请", "info");
+  showToast("请先完成身份信息登记，再提交认领申请", "info");
   setTimeout(() => {
     els.verifyDialog.showModal();
   }, 500);
@@ -1727,8 +1728,8 @@ function renderInstitutionContact(record) {
 
   if (record.is_fuzzy && !isInstitution) {
     return `<div class="institution-info fuzzy">
-      <p><strong>保管机构：</strong>实名认证后查看</p>
-      <p><strong>联系电话：</strong><button class="text-button verify-trigger" type="button">完成实名认证后查看</button></p>
+      <p><strong>保管机构：</strong>完成身份信息登记后查看</p>
+      <p><strong>联系电话：</strong><button class="text-button verify-trigger" type="button">完成身份信息登记后查看</button></p>
     </div>`;
   }
 
@@ -1869,6 +1870,10 @@ async function handleMarkAllRead() {
   } catch (e) { /* 静默 */ }
 }
 
+function displayBadgeName(badge) {
+  return badge === "✅ 实名认证" ? "✅ 身份信息登记" : badge;
+}
+
 // ============== 个人主页 ==============
 function renderProfile() {
   if (!currentUser) {
@@ -1887,9 +1892,9 @@ function renderProfile() {
   const streak = currentUser.streak_days || 0;
 
   const verifySection = verified
-    ? `<div class="verify-status verified"><span>✅ 已完成实名认证</span><small>您可以查看完整联系方式</small></div>`
-    : `<div class="verify-status unverified"><span>⚠️ 未实名认证</span><small>认证后可查看完整联系方式</small></div>
-       <button class="primary-action" onclick="document.querySelector('#verifyDialog').showModal()">完成实名认证</button>`;
+    ? `<div class="verify-status verified"><span>✅ 已完成身份信息登记</span><small>您可以查看完整联系方式</small></div>`
+    : `<div class="verify-status unverified"><span>⚠️ 未完成身份信息登记</span><small>登记后可查看完整联系方式</small></div>
+       <button class="primary-action" onclick="document.querySelector('#verifyDialog').showModal()">完成身份信息登记</button>`;
 
   const myRecords = records.filter((r) => r.owner_id === currentUser.sub);
   const myRecordsHtml = myRecords.length
@@ -1901,7 +1906,7 @@ function renderProfile() {
       <div class="profile-avatar">${escapeHtml((currentUser.nickname || "?")[0])}</div>
       <div class="profile-info">
         <h3>${escapeHtml(currentUser.nickname || "无名氏")}</h3>
-        <p>${verified ? "✅ 已实名认证" : "⚠️ 未实名认证"}</p>
+        <p>${verified ? "✅ 已完成身份信息登记" : "⚠️ 未完成身份信息登记"}</p>
         <p>登录方式：${currentUser.provider === "password" ? "邮箱密码" : "离线测试"}</p>
       </div>
     </div>
@@ -1920,7 +1925,7 @@ function renderProfile() {
     </div>
     <div class="profile-badges">
       <h4>我的徽章</h4>
-      <div class="badge-list">${badges.map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}">${b}</span>`).join("")}</div>
+      <div class="badge-list">${badges.map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}">${displayBadgeName(b)}</span>`).join("")}</div>
     </div>
     ${verifySection}
     <div class="my-records-section">
@@ -2864,7 +2869,7 @@ function renderUserStatusBar() {
     <span class="status-avatar">${escapeHtml((currentUser.nickname || "?")[0])}</span>
     <span class="status-level">Lv.${level} ${title}</span>
     <span class="status-exp">EXP ${exp}/${nextExp}</span>
-    <span class="status-badges">${badges.slice(0, 3).map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}" style="padding:2px 6px;font-size:11px;">${b}</span>`).join("")}</span>
+    <span class="status-badges">${badges.slice(0, 3).map((b) => `<span class="badge-item" data-rarity="${BADGE_RARITY[b] || 'common'}" style="padding:2px 6px;font-size:11px;">${displayBadgeName(b)}</span>`).join("")}</span>
   `;
   bar.style.display = "flex";
 }
@@ -2987,8 +2992,8 @@ const MASCOT_TIPS = {
     "📊 数据见证温暖，每一份善意都被记录~",
   ],
   unverified: [
-    "🔒 实名认证后可以查看完整联系方式哦~",
-    "🆔 点击右上角【实名认证】完成身份验证吧！",
+    "🔒 完成身份信息登记后可以查看完整联系方式",
+    "🆔 点击右上角【身份信息登记】完成登记",
   ],
   guest: [
     "👤 登录后可以发布信息和查看联系方式~",
@@ -3003,7 +3008,7 @@ const MASCOT_FAQ = [
   { q: "AI 匹配是怎么工作的？", a: "系统会从类别、颜色、地点、时间、文本语义等多个维度计算匹配度，给出 0-100% 的匹配分数。" },
   { q: "如何申请认领物品？", a: "在匹配结果中找到高匹配度的记录，点击【认领申请】，回答发布者设置的问题，等待审核通过即可。" },
   { q: "信用分是什么？", a: "信用分是拾寻的信誉体系：好评+10分，差评-5分，被举报核实-20分。信用分越高，越容易被信任。" },
-  { q: "实名认证有什么用？", a: "实名认证后信用分提升至 10 分，可以查看完整联系方式，让交易更放心。" },
+  { q: "身份信息登记有什么用？", a: "完成登记后信用分提升至 10 分，并可在认领审核通过后查看完整联系方式。" },
   { q: "我的隐私安全吗？", a: "拾寻仅在认领审核通过后向双方展示联系方式，平时信息脱敏展示，保护用户隐私。" },
   { q: "如何获得徽章？", a: "通过发布信息、帮助匹配、连续活跃等行为可以解锁徽章，比如【初次发布】【匹配达人】【助人为乐】等。" },
 ];

@@ -6,7 +6,7 @@
 //   POST /api/auth?action=password-login    { email, password }                邮箱登录
 //   POST /api/auth?action=guest-login       { nickname? }                      仅离线测试兜底
 //   GET  /api/auth?action=me                                                   获取当前用户
-//   POST /api/auth?action=verify-identity { real_name, id_card_last4 }         Mock 实名认证
+//   POST /api/auth?action=verify-identity { real_name, id_card_last4 }         身份信息登记
 
 const crypto = require("crypto");
 const {
@@ -29,7 +29,7 @@ const memoryUsers = new Map();
 // 徽章定义
 const BADGE_DEFS = {
   "newbie": { emoji: "🌱", name: "新手上路", rarity: "common", desc: "加入拾寻" },
-  "verified": { emoji: "✅", name: "实名认证", rarity: "rare", desc: "完成实名认证" },
+  "verified": { emoji: "✅", name: "身份信息登记", rarity: "rare", desc: "完成身份信息登记" },
   "first_publish": { emoji: "📝", name: "初次发布", rarity: "common", desc: "首次发布信息" },
   "match_master": { emoji: "🎯", name: "匹配达人", rarity: "rare", desc: "产生一次80%+匹配" },
   "helper": { emoji: "🤝", name: "助人为乐", rarity: "epic", desc: "帮助找回1件物品" },
@@ -117,13 +117,18 @@ async function callSupabaseAuth(config, path, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
+    const headers = {
+      apikey: config.key,
+      "Content-Type": "application/json",
+    };
+    // New sb_publishable_/sb_secret_ API keys are opaque values, not JWTs.
+    // Only legacy JWT keys can be sent as Authorization Bearer credentials.
+    if (/^eyJ[^.]*\.[^.]+\.[^.]+$/.test(config.key)) {
+      headers.Authorization = "Bearer " + config.key;
+    }
     const response = await fetch(`${config.url}${path}`, {
       method: "POST",
-      headers: {
-        apikey: config.key,
-        Authorization: `Bearer ${config.key}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -200,6 +205,7 @@ async function handlePasswordRegister(req, res) {
       data: { nickname: input.nickname },
     });
     if (!result.ok || !result.payload?.user?.id) {
+      console.warn("[auth] provider_failed action=register status=" + result.status + " key_source=" + config.keySource);
       return sendJson(res, result.status >= 400 && result.status < 500 ? result.status : 502, {
         error: mapProviderError(result, "register"),
       });
@@ -231,6 +237,7 @@ async function handlePasswordLogin(req, res) {
       password: input.password,
     });
     if (!result.ok || !result.payload?.user?.id || !result.payload?.access_token) {
+      console.warn("[auth] provider_failed action=login status=" + result.status + " key_source=" + config.keySource);
       return sendJson(res, result.status >= 400 && result.status < 500 ? result.status : 502, {
         error: mapProviderError(result, "login"),
       });
@@ -270,27 +277,28 @@ async function handleVerifyIdentity(req, res) {
   const body = await readJsonBody(req);
   const realName = String(body.real_name || "").trim();
   const idLast4 = String(body.id_card_last4 || "").trim();
-  // demo 阶段 mock 校验：姓名 ≥ 2 字 + 末 4 位是数字
+  // 身份信息格式校验：姓名 ≥ 2 字 + 末 4 位是数字
   if (realName.length < 2 || !/^\d{4}$/.test(idLast4)) {
-    sendJson(res, 400, { error: "实名信息格式不正确（mock 校验）" });
+    sendJson(res, 400, { error: "身份信息格式不正确" });
     return;
   }
   const user = await fetchUserById(current.sub);
-  // 幂等校验：已实名认证的用户不再重复发放经验
+  // 幂等校验：已完成身份信息登记的用户不再重复发放经验
   // 同时检查数据库中的 is_verified 和 JWT 中的 verified，防止 fetchUserById 失败时绕过校验
   if (user?.is_verified || current.verified) {
     sendJson(res, 200, { alreadyVerified: true, user: user || { id: current.sub, nickname: current.nickname, is_verified: true }, unlocked: { badge: null, expDelta: 0, levelUp: false } });
     return;
   }
   const oldBadges = user?.badges || ["🌱 新手上路"];
-  const newBadges = oldBadges.includes("✅ 实名认证") ? oldBadges : [...oldBadges, "✅ 实名认证"];
+  const normalizedBadges = oldBadges.map((badge) => badge === "✅ 实名认证" ? "✅ 身份信息登记" : badge);
+  const newBadges = normalizedBadges.includes("✅ 身份信息登记") ? normalizedBadges : [...normalizedBadges, "✅ 身份信息登记"];
   const oldExp = user?.exp || 0;
   const newExp = oldExp + 50;
   const newLevel = calculateLevel(newExp);
   const updated = await updateUser(current.sub, {
     is_verified: true,
     real_name_hash: crypto.createHash("sha256").update(realName + idLast4).digest("hex").slice(0, 16),
-    credit_score: 10, // 实名认证后信用分设为10（基准值）
+    credit_score: 10, // 完成身份信息登记后信用分设为10（基准值）
     badges: newBadges,
     exp: newExp,
     level: newLevel,
